@@ -43,68 +43,77 @@ const CONDITION_OPTIONS = [
   "Ohne Verpackung", "Ohne Anleitung", "Defekt/Ersatzteile",
 ];
 
-// Verwandelt ein normales Text-Input in ein Kombifeld: Klick/Fokus zeigt eine
-// Dropdown-Liste mit Vorschlaegen (gefiltert nach dem bereits Eingetippten),
-// man kann aber jederzeit auch einen eigenen Text eingeben, der nicht in der
-// Liste steht - das Feld bleibt ein ganz normales <input>.
+// Verwandelt ein normales Text-Input in ein Kombifeld: ein echtes <select>
+// (genau wie beim Typ-Feld - auf dem Handy also der native Auswahl-Picker)
+// mit den Vorschlaegen, plus einer Option "Eigener Text", die ein Textfeld
+// fuer freie Eingaben einblendet. Robuster als ein selbstgebautes Dropdown,
+// weil Mac/iPhone/Android hier einfach ihre eigene native Auswahl anzeigen.
 function enhanceCombo(input, options) {
-  if (!input || input.dataset.comboReady) return;
+  if (!input || input.dataset.comboReady) return null;
   input.dataset.comboReady = "1";
-  input.setAttribute("autocomplete", "off");
 
+  const CUSTOM = "__custom__";
   const wrap = document.createElement("div");
   wrap.className = "combo-wrap";
   input.parentNode.insertBefore(wrap, input);
-  wrap.appendChild(input);
 
-  const toggle = document.createElement("button");
-  toggle.type = "button";
-  toggle.className = "combo-toggle";
-  toggle.textContent = "▾";
-  toggle.tabIndex = -1;
-  wrap.appendChild(toggle);
-
-  const list = document.createElement("ul");
-  list.className = "combo-list hidden";
-  wrap.appendChild(list);
-
-  function render(filterVal) {
-    const f = (filterVal || "").trim().toLowerCase();
-    const matches = f ? options.filter((o) => o.toLowerCase().includes(f)) : options;
-    list.innerHTML = matches.length
-      ? matches.map((o) => `<li>${escapeHtml(o)}</li>`).join("")
-      : `<li class="combo-empty">Kein Vorschlag – eigener Text wird übernommen</li>`;
-  }
-  function open() {
-    render(input.value);
-    list.classList.remove("hidden");
-  }
-  function close() {
-    list.classList.add("hidden");
-  }
-
-  input.addEventListener("focus", open);
-  input.addEventListener("input", open);
-  toggle.addEventListener("click", () => {
-    if (list.classList.contains("hidden")) {
-      input.focus();
-      open();
-    } else {
-      close();
-    }
+  const select = document.createElement("select");
+  select.className = "combo-select";
+  const blankOpt = document.createElement("option");
+  blankOpt.value = "";
+  blankOpt.textContent = "– auswählen –";
+  select.appendChild(blankOpt);
+  options.forEach((o) => {
+    const opt = document.createElement("option");
+    opt.value = o;
+    opt.textContent = o;
+    select.appendChild(opt);
   });
-  list.addEventListener("mousedown", (e) => {
-    const li = e.target.closest("li");
-    if (!li || li.classList.contains("combo-empty")) return;
-    e.preventDefault();
-    input.value = li.textContent;
-    close();
+  const customOpt = document.createElement("option");
+  customOpt.value = CUSTOM;
+  customOpt.textContent = "✏️ Eigener Text…";
+  select.appendChild(customOpt);
+
+  wrap.appendChild(select);
+  wrap.appendChild(input);
+  input.classList.add("combo-text");
+  if (!input.placeholder) input.placeholder = "Eigener Text";
+
+  function syncFromValue() {
+    const v = (input.value || "").trim();
+    if (!v) {
+      select.value = "";
+      input.classList.add("hidden");
+    } else if (options.includes(v)) {
+      select.value = v;
+      input.classList.add("hidden");
+    } else {
+      select.value = CUSTOM;
+      input.classList.remove("hidden");
+    }
+  }
+
+  select.addEventListener("change", () => {
+    if (select.value === CUSTOM) {
+      input.classList.remove("hidden");
+      if (options.includes(input.value.trim())) input.value = "";
+      input.focus();
+    } else {
+      input.classList.add("hidden");
+      input.value = select.value;
+    }
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.dispatchEvent(new Event("change", { bubbles: true }));
   });
-  document.addEventListener("click", (e) => {
-    if (!wrap.contains(e.target)) close();
-  });
+
+  syncFromValue();
+
+  return {
+    setValue(v) {
+      input.value = v || "";
+      syncFromValue();
+    },
+  };
 }
 
 // Ruft die Edge Function auf und liefert im Fehlerfall, wenn moeglich, die konkrete
@@ -365,9 +374,9 @@ function renderAdd() {
   main.appendChild(document.getElementById("tpl-add").content.cloneNode(true));
   selectedFiles = [];
 
-  enhanceCombo(document.getElementById("f-console"), CONSOLE_OPTIONS);
-  enhanceCombo(document.getElementById("f-category"), CATEGORY_OPTIONS);
-  enhanceCombo(document.getElementById("f-condition"), CONDITION_OPTIONS);
+  const consoleCombo = enhanceCombo(document.getElementById("f-console"), CONSOLE_OPTIONS);
+  const categoryCombo = enhanceCombo(document.getElementById("f-category"), CATEGORY_OPTIONS);
+  const conditionCombo = enhanceCombo(document.getElementById("f-condition"), CONDITION_OPTIONS);
 
   const photoInput = document.getElementById("photo-input");
   const photoPreviews = document.getElementById("photo-previews");
@@ -397,9 +406,9 @@ function renderAdd() {
       const s = data.suggestion || {};
       if (s.type) document.getElementById("f-type").value = s.type;
       if (s.title) document.getElementById("f-title").value = s.title;
-      if (s.console) document.getElementById("f-console").value = s.console;
-      if (s.category) document.getElementById("f-category").value = s.category;
-      if (s.condition) document.getElementById("f-condition").value = s.condition;
+      if (s.console) consoleCombo.setValue(s.console);
+      if (s.category) categoryCombo.setValue(s.category);
+      if (s.condition) conditionCombo.setValue(s.condition);
       if (s.details) document.getElementById("f-details").value = s.details;
       analyzeStatus.textContent = `✅ Vorschlag übernommen (Konfidenz: ${s.confidence || "unbekannt"}). Bitte prüfen und ggf. korrigieren.`;
     } catch (err) {
