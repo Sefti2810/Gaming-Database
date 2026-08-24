@@ -43,6 +43,18 @@ const CONDITION_OPTIONS = [
   "Ohne Verpackung", "Ohne Anleitung", "Defekt/Ersatzteile",
 ];
 
+// Verkaufsstatus-Vermerk je Artikel (z. B. "zum Verkauf vorgesehen"/"nicht zu verkaufen").
+const SALE_STATUS = {
+  for_sale: { label: "Zum Verkauf vorgesehen", cls: "sale-for-sale" },
+  reserved: { label: "Reserviert", cls: "sale-reserved" },
+  sold: { label: "Verkauft", cls: "sale-sold" },
+  not_for_sale: { label: "Nicht zu verkaufen", cls: "sale-not-for-sale" },
+};
+function saleBadgeHtml(status) {
+  const s = SALE_STATUS[status];
+  return s ? `<span class="sale-badge ${s.cls}">${s.label}</span>` : "";
+}
+
 // Verwandelt ein normales Text-Input in ein Kombifeld: ein echtes <select>
 // (genau wie beim Typ-Feld - auf dem Handy also der native Auswahl-Picker)
 // mit den Vorschlaegen, plus einer Option "Eigener Text", die ein Textfeld
@@ -186,6 +198,47 @@ document.getElementById("logout-btn").addEventListener("click", async () => {
 document.getElementById("export-btn").addEventListener("click", exportCsv);
 
 // ---------------------------------------------------------------------
+// Darstellung: Hell/Dunkel-Modus (Vorliebe wird im Browser gemerkt)
+// ---------------------------------------------------------------------
+const THEME_KEY = "sammlung-theme";
+
+function currentEffectiveTheme() {
+  const attr = document.documentElement.getAttribute("data-theme");
+  if (attr === "dark" || attr === "light") return attr;
+  return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function updateThemeButton() {
+  const btn = document.getElementById("theme-toggle");
+  if (!btn) return;
+  btn.textContent = currentEffectiveTheme() === "dark" ? "☀️" : "🌙";
+}
+
+document.getElementById("theme-toggle").addEventListener("click", () => {
+  const next = currentEffectiveTheme() === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  try {
+    localStorage.setItem(THEME_KEY, next);
+  } catch (_) {
+    // localStorage evtl. nicht verfuegbar - Vorliebe gilt dann nur fuer diese Sitzung.
+  }
+  updateThemeButton();
+});
+
+updateThemeButton();
+
+// ---------------------------------------------------------------------
+// Übersicht: Karten- oder Listenansicht (Vorliebe wird gemerkt)
+// ---------------------------------------------------------------------
+const VIEW_KEY = "sammlung-view";
+let currentView = "grid";
+try {
+  currentView = localStorage.getItem(VIEW_KEY) === "list" ? "list" : "grid";
+} catch (_) {
+  // localStorage evtl. nicht verfuegbar - Standardansicht (Karten) nutzen.
+}
+
+// ---------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------
 window.addEventListener("hashchange", router);
@@ -271,9 +324,35 @@ async function renderIndex() {
 
   renderStats(items);
   populateConsoleFilter(items);
+  updateViewButtons();
   applyFiltersAndRender(items);
 
   document.getElementById("filter-form").addEventListener("input", () => applyFiltersAndRender(items));
+  document.getElementById("view-grid-btn").addEventListener("click", () => setView("grid", items));
+  document.getElementById("view-list-btn").addEventListener("click", () => setView("list", items));
+}
+
+function setView(view, items) {
+  currentView = view;
+  try {
+    localStorage.setItem(VIEW_KEY, view);
+  } catch (_) {
+    // localStorage evtl. nicht verfuegbar - Auswahl gilt dann nur fuer diese Sitzung.
+  }
+  updateViewButtons();
+  applyFiltersAndRender(items);
+}
+
+function updateViewButtons() {
+  const gridBtn = document.getElementById("view-grid-btn");
+  const listBtn = document.getElementById("view-list-btn");
+  const listHeader = document.getElementById("list-header");
+  const grid = document.getElementById("grid");
+  if (!gridBtn || !listBtn) return;
+  gridBtn.classList.toggle("active", currentView === "grid");
+  listBtn.classList.toggle("active", currentView === "list");
+  if (listHeader) listHeader.classList.toggle("hidden", currentView !== "list");
+  if (grid) grid.classList.toggle("list", currentView === "list");
 }
 
 function renderStats(items) {
@@ -306,11 +385,13 @@ async function applyFiltersAndRender(items) {
   const q = (fd.get("q") || "").toString().toLowerCase();
   const type = fd.get("type");
   const cons = fd.get("console");
+  const saleStatus = fd.get("sale_status");
   const sort = fd.get("sort");
 
   let filtered = items.filter((i) => {
     if (type && i.type !== type) return false;
     if (cons && i.console !== cons) return false;
+    if (saleStatus && (i.sale_status || "") !== saleStatus) return false;
     if (q) {
       const hay = `${i.title} ${i.console} ${i.details} ${i.notes}`.toLowerCase();
       if (!hay.includes(q)) return false;
@@ -327,6 +408,8 @@ async function applyFiltersAndRender(items) {
   }[sort] || (() => 0);
   filtered = filtered.sort(cmp);
 
+  updateViewButtons();
+
   const grid = document.getElementById("grid");
   const empty = document.getElementById("empty-state");
   if (filtered.length === 0) {
@@ -335,6 +418,24 @@ async function applyFiltersAndRender(items) {
     return;
   }
   empty.classList.add("hidden");
+
+  if (currentView === "list") {
+    // Listenansicht: bewusst ohne Fotos/Signed-URLs fuer einen schnellen Überblick.
+    grid.innerHTML = filtered
+      .map(
+        (item) => `
+      <a class="list-row" href="#/item/${item.id}">
+        <span class="badge-inline badge-${item.type}">${TYPE_LABELS[item.type] || item.type}</span>
+        <span class="list-title">${escapeHtml(item.title) || "(ohne Titel)"}</span>
+        <span class="list-console">${escapeHtml(item.console)}</span>
+        <span class="list-status">${saleBadgeHtml(item.sale_status) || "–"}</span>
+        <span class="list-price">${item.purchase_price != null ? Number(item.purchase_price).toFixed(2) + " €" : "–"}</span>
+        <span class="list-price">${item.estimated_value != null ? Number(item.estimated_value).toFixed(2) + " €" : "–"}</span>
+      </a>`
+      )
+      .join("");
+    return;
+  }
 
   const firstPhotoPaths = filtered.map((i) => i.photos?.[0]).filter(Boolean);
   const urlMap = await getSignedUrlMap(firstPhotoPaths);
@@ -355,6 +456,7 @@ async function applyFiltersAndRender(items) {
           <div class="card-title">${escapeHtml(item.title) || "(ohne Titel)"}</div>
           <div class="card-console">${escapeHtml(item.console)}</div>
           ${item.category ? `<div class="card-category">${escapeHtml(item.category)}</div>` : ""}
+          ${item.sale_status ? `<div class="card-sale">${saleBadgeHtml(item.sale_status)}</div>` : ""}
           <div class="card-prices">
             <span>Kauf: ${item.purchase_price != null ? Number(item.purchase_price).toFixed(2) + " €" : "–"}</span>
             <span>Wert: ${item.estimated_value != null ? Number(item.estimated_value).toFixed(2) + " €" : "–"}</span>
@@ -433,6 +535,7 @@ function renderAdd() {
         details: document.getElementById("f-details").value.trim(),
         purchase_price: parseFloatOrNull(document.getElementById("f-purchase").value),
         estimated_value: parseFloatOrNull(document.getElementById("f-estimated").value),
+        sale_status: document.getElementById("f-sale-status").value || null,
         notes: document.getElementById("f-notes").value.trim(),
         photos,
       };
@@ -614,6 +717,7 @@ async function renderItem(id) {
   enhanceCombo(document.getElementById("e-condition"), CONDITION_OPTIONS);
   document.getElementById("e-purchase").value = item.purchase_price ?? "";
   document.getElementById("e-estimated").value = item.estimated_value ?? "";
+  document.getElementById("e-sale-status").value = item.sale_status || "";
   document.getElementById("e-notes").value = item.notes || "";
 
   if (item.ai_price_note) {
@@ -649,6 +753,7 @@ async function renderItem(id) {
       details: document.getElementById("e-details").value.trim(),
       purchase_price: parseFloatOrNull(document.getElementById("e-purchase").value),
       estimated_value: parseFloatOrNull(document.getElementById("e-estimated").value),
+      sale_status: document.getElementById("e-sale-status").value || null,
       notes: document.getElementById("e-notes").value.trim(),
     };
     const { error } = await supabase.from("items").update(payload).eq("id", id);
@@ -737,7 +842,7 @@ async function exportCsv() {
     flash("⚠️ Export fehlgeschlagen: " + error.message);
     return;
   }
-  const header = ["Typ", "Titel", "Konsole", "Kategorie", "Zustand", "Details", "Kaufpreis", "Geschaetzter Wert", "Notizen", "Erstellt"];
+  const header = ["Typ", "Titel", "Konsole", "Kategorie", "Zustand", "Details", "Kaufpreis", "Geschaetzter Wert", "Verkaufsstatus", "Notizen", "Erstellt"];
   const rows = items.map((r) => [
     TYPE_LABELS[r.type] || r.type,
     r.title,
@@ -747,6 +852,7 @@ async function exportCsv() {
     r.details,
     r.purchase_price ?? "",
     r.estimated_value ?? "",
+    (SALE_STATUS[r.sale_status] && SALE_STATUS[r.sale_status].label) || "",
     r.notes,
     r.created_at,
   ]);

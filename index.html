@@ -7,6 +7,18 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#b5652c">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22><text y=%2213%22 font-size=%2214%22>🎮</text></svg>">
+<script>
+// Frueh (vor dem CSS-Rendering) gespeicherten Dark-Mode anwenden, damit die Seite
+// nicht kurz hell aufblitzt, bevor auf dunkel umgeschaltet wird.
+(function () {
+  try {
+    var saved = localStorage.getItem("sammlung-theme");
+    if (saved === "dark" || saved === "light") {
+      document.documentElement.setAttribute("data-theme", saved);
+    }
+  } catch (e) {}
+})();
+</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -34,6 +46,7 @@
       <a href="#/add" class="btn-primary-nav">+ Artikel</a>
       <a href="#/import">Import</a>
       <button id="export-btn" class="link-btn">Export</button>
+      <button id="theme-toggle" class="link-btn" type="button" title="Darstellung wechseln">🌙</button>
       <button id="logout-btn" class="link-btn">Abmelden</button>
     </nav>
   </header>
@@ -53,6 +66,13 @@
       <option value="zubehoer">Zubehoer</option>
     </select>
     <select name="console" id="console-filter"><option value="">Alle Konsolen</option></select>
+    <select name="sale_status">
+      <option value="">Alle Status</option>
+      <option value="for_sale">Zum Verkauf vorgesehen</option>
+      <option value="reserved">Reserviert</option>
+      <option value="sold">Verkauft</option>
+      <option value="not_for_sale">Nicht zu verkaufen</option>
+    </select>
     <select name="sort">
       <option value="created_desc">Neueste zuerst</option>
       <option value="created_asc">Älteste zuerst</option>
@@ -60,7 +80,14 @@
       <option value="value_desc">Wert absteigend</option>
       <option value="value_asc">Wert aufsteigend</option>
     </select>
+    <div class="view-toggle" role="group" aria-label="Ansicht">
+      <button type="button" id="view-grid-btn" class="view-btn" title="Kartenansicht (mit Fotos)">🔲 Karten</button>
+      <button type="button" id="view-list-btn" class="view-btn" title="Listenansicht (schneller Überblick, ohne Fotos)">📋 Liste</button>
+    </div>
   </form>
+  <div id="list-header" class="list-header hidden">
+    <span>Typ</span><span>Titel</span><span>Konsole</span><span>Status</span><span>Kauf</span><span>Wert</span>
+  </div>
   <div id="grid" class="grid"></div>
   <div id="empty-state" class="empty-state hidden">
     <p>Noch keine Artikel erfasst.</p>
@@ -101,6 +128,15 @@
       <label class="full">Details<textarea name="details" id="f-details" rows="2" placeholder="Region, Edition, Bundle-Inhalt, Besonderheiten…"></textarea></label>
       <label>Kaufpreis (€)<input type="number" step="0.01" min="0" name="purchase_price" id="f-purchase"></label>
       <label>Geschätzter Verkaufswert (€)<input type="number" step="0.01" min="0" name="estimated_value" id="f-estimated"></label>
+      <label>Verkaufsstatus
+        <select name="sale_status" id="f-sale-status">
+          <option value="">– kein Vermerk –</option>
+          <option value="for_sale">Zum Verkauf vorgesehen</option>
+          <option value="reserved">Reserviert</option>
+          <option value="sold">Verkauft</option>
+          <option value="not_for_sale">Nicht zu verkaufen</option>
+        </select>
+      </label>
       <label class="full">Notizen<textarea name="notes" id="f-notes" rows="2"></textarea></label>
     </div>
     <div class="form-actions">
@@ -183,6 +219,15 @@
         <label class="full">Details<textarea name="details" id="e-details" rows="2"></textarea></label>
         <label>Kaufpreis (€)<input type="number" step="0.01" min="0" name="purchase_price" id="e-purchase"></label>
         <label>Geschätzter Verkaufswert (€)<input type="number" step="0.01" min="0" name="estimated_value" id="e-estimated"></label>
+        <label>Verkaufsstatus
+          <select name="sale_status" id="e-sale-status">
+            <option value="">– kein Vermerk –</option>
+            <option value="for_sale">Zum Verkauf vorgesehen</option>
+            <option value="reserved">Reserviert</option>
+            <option value="sold">Verkauft</option>
+            <option value="not_for_sale">Nicht zu verkaufen</option>
+          </select>
+        </label>
         <label class="full">Notizen<textarea name="notes" id="e-notes" rows="2"></textarea></label>
       </div>
       <div id="ai-note" class="ai-note hidden"></div>
