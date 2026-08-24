@@ -1,115 +1,385 @@
-<!doctype html>
-<html lang="de">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Sammlung-Tracker</title>
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#b5652c">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22><text y=%2213%22 font-size=%2214%22>🎮</text></svg>">
-<script>
-// Frueh (vor dem CSS-Rendering) gespeicherten Dark-Mode anwenden, damit die Seite
-// nicht kurz hell aufblitzt, bevor auf dunkel umgeschaltet wird.
-(function () {
-  try {
-    var saved = localStorage.getItem("sammlung-theme");
-    if (saved === "dark" || saved === "light") {
-      document.documentElement.setAttribute("data-theme", saved);
-    }
-  } catch (e) {}
-})();
-</script>
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
+:root {
+  --bg: #f6f5f2;
+  --card: #ffffff;
+  --border: #e4e1da;
+  --text: #262420;
+  --text-muted: #78736a;
+  --accent: #b5652c;
+  --accent-dark: #8f4f21;
+  --pos: #2f7d4f;
+  --neg: #b23a3a;
+  --radius: 10px;
+  --surface-2: #f1efe9;
+  --photo-bg: #eee;
+  --flash-bg: #eaf3ec;
+  --flash-border: #bfdcc6;
+  --flash-text: #2f6b45;
+  --notice-bg: #fbf1e2;
+  --notice-border: #ecd7ae;
+  color-scheme: light;
+}
 
-<!-- Login -->
-<section id="view-login" class="view">
-  <div class="login-box">
-    <h1>🎮 Sammlung-Tracker</h1>
-    <p class="muted">Bitte anmelden.</p>
-    <form id="login-form">
-      <label>E-Mail<input type="email" id="login-email" required autocomplete="username"></label>
-      <label>Passwort<input type="password" id="login-password" required autocomplete="current-password"></label>
-      <button type="submit" class="btn-primary">Anmelden</button>
-      <div id="login-error" class="status-text error"></div>
-    </form>
-  </div>
-</section>
+/* Dunkles Farbschema: folgt der Systemeinstellung, sofern nicht ueber den
+   Umschalter im Kopfbereich (data-theme) explizit uebersteuert. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #171613;
+    --card: #221f1b;
+    --border: #3a362e;
+    --text: #ece7dd;
+    --text-muted: #a29b8c;
+    --accent: #d98a4f;
+    --accent-dark: #f0a868;
+    --pos: #4fbb80;
+    --neg: #e2716f;
+    --surface-2: #2c2822;
+    --photo-bg: #2c2822;
+    --flash-bg: #1e3327;
+    --flash-border: #2f5138;
+    --flash-text: #8fd8a8;
+    --notice-bg: #3a2f1c;
+    --notice-border: #5c4a2a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #171613;
+  --card: #221f1b;
+  --border: #3a362e;
+  --text: #ece7dd;
+  --text-muted: #a29b8c;
+  --accent: #d98a4f;
+  --accent-dark: #f0a868;
+  --pos: #4fbb80;
+  --neg: #e2716f;
+  --surface-2: #2c2822;
+  --photo-bg: #2c2822;
+  --flash-bg: #1e3327;
+  --flash-border: #2f5138;
+  --flash-text: #8fd8a8;
+  --notice-bg: #3a2f1c;
+  --notice-border: #5c4a2a;
+  color-scheme: dark;
+}
 
-<!-- App shell -->
-<div id="app-shell" class="hidden">
-  <header class="topbar">
-    <a class="brand" href="#/">🎮 Sammlung-Tracker</a>
-    <nav>
-      <a href="#/">Übersicht</a>
-      <a href="#/add" class="btn-primary-nav">+ Artikel</a>
-      <a href="#/import">Import</a>
-      <button id="export-btn" class="link-btn">Export</button>
-      <button id="theme-toggle" class="link-btn" type="button" title="Darstellung wechseln">🌙</button>
-      <button id="logout-btn" class="link-btn">Abmelden</button>
-    </nav>
-  </header>
-  <div id="flash" class="flash hidden"></div>
-  <main id="main"></main>
-</div>
+* { box-sizing: border-box; }
 
-<!-- Templates -->
-<template id="tpl-index">
-  <section class="stats" id="stats"></section>
-  <form class="filters" id="filter-form">
-    <input type="text" name="q" placeholder="Suche: Titel, Konsole, Details…">
-    <select name="type">
-      <option value="">Alle Typen</option>
-      <option value="konsole">Konsole</option>
-      <option value="spiel">Spiel</option>
-      <option value="zubehoer">Zubehoer</option>
-    </select>
-    <select name="console" id="console-filter"><option value="">Alle Konsolen</option></select>
-    <details class="ms-filter" id="sale-status-filter">
-      <summary>Status <span class="ms-count"></span></summary>
-      <div class="ms-options">
-        <label><input type="checkbox" name="sale_status" value="" checked> Ohne Vermerk</label>
-        <label><input type="checkbox" name="sale_status" value="for_sale" checked> Zum Verkauf vorgesehen</label>
-        <label><input type="checkbox" name="sale_status" value="reserved" checked> Reserviert</label>
-        <label><input type="checkbox" name="sale_status" value="sold" checked> Verkauft</label>
-        <label><input type="checkbox" name="sale_status" value="not_for_sale" checked> Nicht zu verkaufen</label>
-        <div class="ms-actions">
-          <button type="button" class="ms-all">Alle</button>
-          <button type="button" class="ms-none">Keine</button>
-        </div>
-      </div>
-    </details>
-    <select name="sort">
-      <option value="created_desc">Neueste zuerst</option>
-      <option value="created_asc">Älteste zuerst</option>
-      <option value="title_asc">Titel A–Z</option>
-      <option value="value_desc">Wert absteigend</option>
-      <option value="value_asc">Wert aufsteigend</option>
-    </select>
-    <div class="view-toggle" role="group" aria-label="Ansicht">
-      <button type="button" id="view-grid-btn" class="view-btn" title="Kartenansicht (mit Fotos)">🔲 Karten</button>
-      <button type="button" id="view-list-btn" class="view-btn" title="Listenansicht (schneller Überblick, ohne Fotos)">📋 Liste</button>
-    </div>
-  </form>
-  <div id="list-header" class="list-header hidden">
-    <span>Typ</span><span>Titel</span><span>Konsole</span><span>Status</span><span>Kauf</span><span>Wert</span>
-  </div>
-  <div id="grid" class="grid"></div>
-  <div id="empty-state" class="empty-state hidden">
-    <p>Noch keine Artikel erfasst.</p>
-    <a class="btn-primary" href="#/add">Ersten Artikel hinzufügen</a>
-  </div>
-</template>
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
 
-<template id="tpl-add">
-  <h1>Neuen Artikel hinzufügen</h1>
-  <div id="no-key-notice" class="notice hidden">
-    KI-Bilderkennung ist (noch) nicht eingerichtet – du kannst trotzdem ein Foto anhängen
-    und alle Felder manuell ausfüllen.
-  </div>
-  <form id="item-form" class="item-form">
-    <div class="photo-section">
-      <label class="photo-drop" id="photo-drop">
-        <input type="file" id="photo-input" accept="image/*" capture="environment" multiple>
-        <span id="photo-drop-text">📷 Foto
+.hidden { display: none !important; }
+
+a { color: var(--accent-dark); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Login */
+#view-login { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.login-box {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 32px 28px; max-width: 340px; width: 100%;
+}
+.login-box h1 { margin: 0 0 4px; font-size: 1.3rem; }
+.login-box .muted { color: var(--text-muted); margin-bottom: 18px; font-size: 0.9rem; }
+.login-box form { display: flex; flex-direction: column; gap: 12px; }
+.login-box label { display: flex; flex-direction: column; gap: 5px; font-size: 0.85rem; color: var(--text-muted); }
+.login-box input { padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.95rem; background: var(--card); color: var(--text); }
+.status-text.error { color: var(--neg); }
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 24px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.brand { font-weight: 700; font-size: 1.1rem; color: var(--text); }
+.brand:hover { text-decoration: none; }
+.topbar nav { display: flex; gap: 18px; align-items: center; }
+.btn-primary-nav {
+  background: var(--accent);
+  color: #fff !important;
+  padding: 6px 14px;
+  border-radius: 8px;
+}
+.btn-primary-nav:hover { background: var(--accent-dark); text-decoration: none; }
+.link-btn {
+  background: none; border: none; color: var(--accent-dark); cursor: pointer;
+  font-size: 1rem; padding: 0; font-family: inherit;
+}
+.link-btn:hover { text-decoration: underline; }
+
+main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
+
+.flash {
+  max-width: 1100px;
+  margin: 12px auto 0;
+  background: var(--flash-bg);
+  border: 1px solid var(--flash-border);
+  color: var(--flash-text);
+  padding: 10px 16px;
+  border-radius: var(--radius);
+}
+
+.notice {
+  background: var(--notice-bg);
+  border: 1px solid var(--notice-border);
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.stat-label { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; }
+.stat-value { font-size: 1.4rem; font-weight: 700; }
+.stat-card.pos .stat-value { color: var(--pos); }
+.stat-card.neg .stat-value { color: var(--neg); }
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.filters input, .filters select {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+.filters input[type=text] { flex: 1; min-width: 180px; }
+
+/* Mehrfachauswahl-Filter (z.B. Verkaufsstatus): <details>/<summary> statt <select>,
+   damit man mehrere Haken gleichzeitig setzen kann (z.B. "Verkauft" ausblenden,
+   Rest anzeigen), ohne extra Bibliothek. */
+.ms-filter { position: relative; }
+.ms-filter > summary {
+  list-style: none; cursor: pointer; user-select: none;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--card); color: var(--text); font-size: 0.9rem;
+  display: flex; align-items: center; gap: 6px;
+}
+.ms-filter > summary::-webkit-details-marker { display: none; }
+.ms-filter > summary::after { content: "▾"; color: var(--text-muted); font-size: 0.75rem; }
+.ms-filter .ms-count { color: var(--text-muted); font-size: 0.8rem; }
+.ms-filter .ms-options {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 20;
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px; display: flex; flex-direction: column; gap: 4px;
+  min-width: 220px; box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+}
+.ms-filter .ms-options label {
+  display: flex; align-items: center; gap: 8px; font-size: 0.88rem;
+  padding: 4px 6px; border-radius: 6px; cursor: pointer;
+}
+.ms-filter .ms-options label:hover { background: var(--photo-bg); }
+.ms-filter .ms-actions { display: flex; gap: 6px; margin-top: 4px; border-top: 1px solid var(--border); padding-top: 6px; }
+.ms-filter .ms-actions button {
+  flex: 1; font-size: 0.78rem; padding: 4px 8px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--photo-bg); color: var(--text); cursor: pointer;
+}
+
+.view-toggle { display: flex; gap: 0; margin-left: auto; }
+.view-btn {
+  border: 1px solid var(--border); background: var(--card); color: var(--text-muted);
+  padding: 8px 12px; font-size: 0.85rem; cursor: pointer; font-family: inherit;
+}
+.view-btn:first-child { border-radius: 8px 0 0 8px; }
+.view-btn:last-child { border-radius: 0 8px 8px 0; border-left: none; }
+.view-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+.grid.list { display: flex; flex-direction: column; gap: 0; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  color: var(--text);
+  display: block;
+  transition: box-shadow .15s ease, transform .15s ease;
+}
+.card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); text-decoration: none; transform: translateY(-2px); }
+.card-photo { position: relative; aspect-ratio: 4/3; background: var(--photo-bg); }
+.card-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.no-photo { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 2.2rem; color: var(--text-muted); }
+.no-photo.big { font-size: 4rem; aspect-ratio: 4/3; background: var(--photo-bg); border-radius: var(--radius); }
+.badge {
+  position: absolute; top: 8px; left: 8px;
+  background: rgba(0,0,0,0.65); color: #fff;
+  font-size: 0.7rem; padding: 3px 8px; border-radius: 20px;
+}
+.card-body { padding: 12px 14px; }
+.card-title { font-weight: 600; margin-bottom: 2px; }
+.card-console { font-size: 0.85rem; color: var(--text-muted); }
+.card-category { font-size: 0.8rem; color: var(--accent-dark); margin-top: 2px; }
+.card-sale { margin-top: 6px; }
+
+/* Verkaufsstatus-Vermerk (Badge auf Karte/Liste sowie im Formular) */
+.sale-badge {
+  display: inline-block; font-size: 0.72rem; padding: 2px 8px; border-radius: 20px;
+  font-weight: 600; white-space: nowrap;
+}
+.sale-for-sale { background: rgba(47,125,79,0.15); color: var(--pos); }
+.sale-reserved { background: rgba(217,138,79,0.18); color: var(--accent-dark); }
+.sale-sold { background: rgba(120,115,106,0.2); color: var(--text-muted); }
+.sale-not-for-sale { background: rgba(178,58,58,0.15); color: var(--neg); }
+
+/* Listenansicht: kompakte Zeilen ohne Fotos, fuer einen schnellen Überblick */
+.list-header {
+  display: grid;
+  grid-template-columns: 110px 2fr 1.3fr 1.4fr 90px 90px;
+  gap: 10px;
+  padding: 6px 14px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.list-row {
+  display: grid;
+  grid-template-columns: 110px 2fr 1.3fr 1.4fr 90px 90px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-top: none;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+.list-row:first-child { border-top: 1px solid var(--border); border-radius: var(--radius) var(--radius) 0 0; }
+.list-row:last-child { border-radius: 0 0 var(--radius) var(--radius); }
+.list-row:hover { background: var(--surface-2); text-decoration: none; }
+.list-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-console, .list-price { color: var(--text-muted); font-size: 0.85rem; }
+.badge-inline {
+  display: inline-block; font-size: 0.7rem; padding: 3px 8px; border-radius: 20px;
+  background: var(--surface-2); color: var(--text-muted); text-align: center; white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .list-header { display: none; }
+  .list-row { grid-template-columns: 1fr 1fr; grid-auto-rows: auto; row-gap: 4px; }
+}
+.card-prices { display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.85rem; color: var(--text-muted); }
+
+.empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+.btn-primary {
+  display: inline-block;
+  background: var(--accent); color: #fff;
+  padding: 10px 18px; border: none; border-radius: 8px;
+  cursor: pointer; font-size: 0.95rem; margin-top: 10px;
+}
+.btn-primary:hover { background: var(--accent-dark); text-decoration: none; color: #fff; }
+.btn-secondary {
+  display: inline-block;
+  background: var(--card); color: var(--text);
+  border: 1px solid var(--border); padding: 10px 18px; border-radius: 8px;
+  cursor: pointer; font-size: 0.95rem;
+}
+.btn-secondary:hover { background: var(--surface-2); text-decoration: none; }
+.btn-secondary.small { padding: 6px 12px; font-size: 0.85rem; }
+.btn-danger {
+  background: var(--card); color: var(--neg); border: 1px solid var(--neg);
+  padding: 8px 16px; border-radius: 8px; cursor: pointer;
+}
+.btn-danger:hover { background: rgba(178,58,58,0.1); }
+
+h1 { font-size: 1.4rem; margin-bottom: 16px; }
+
+.item-form { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 16px;
+  margin-bottom: 16px;
+}
+.field-grid label { display: flex; flex-direction: column; font-size: 0.85rem; color: var(--text-muted); gap: 5px; }
+.field-grid label.full { grid-column: 1 / -1; }
+.field-grid input, .field-grid select, .field-grid textarea {
+  padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px;
+  font-size: 0.95rem; color: var(--text); font-family: inherit; background: var(--card);
+}
+.form-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+.photo-section { margin-bottom: 20px; }
+.photo-drop {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border: 2px dashed var(--border); border-radius: var(--radius);
+  padding: 24px; cursor: pointer; background: var(--card); margin-bottom: 10px;
+  text-align: center;
+}
+.photo-drop input { display: none; }
+.photo-previews { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.photo-previews img { width: 90px; height: 90px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+.status-text { font-size: 0.85rem; color: var(--text-muted); margin-top: 6px; }
+
+.back-link { display: inline-block; margin-bottom: 14px; }
+.item-detail { display: flex; flex-direction: column; gap: 20px; }
+.item-photos { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.add-photo-label { align-self: flex-start; margin-top: -10px; }
+.photo-wrap { position: relative; }
+.photo-wrap img { width: 160px; height: 160px; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--border); }
+.photo-delete {
+  position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff;
+  border: none; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; font-size: 0.75rem;
+}
+.ai-note { background: var(--surface-2); color: var(--text); border-radius: 8px; padding: 10px 14px; font-size: 0.85rem; margin-bottom: 14px; }
+#delete-form { align-self: flex-start; }
+
+#import-text { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 0.95rem; background: var(--card); color: var(--text); }
+.import-review { margin-top: 24px; }
+.import-review h2 { font-size: 1.1rem; margin-bottom: 12px; }
+.table-scroll { overflow-x: auto; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 14px; }
+.import-table { border-collapse: collapse; width: 100%; min-width: 820px; }
+.import-table th {
+  text-align: left; font-size: 0.75rem; color: var(--text-muted); font-weight: 600;
+  padding: 8px 8px; border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.import-table td { padding: 4px 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.import-table tr:last-child td { border-bottom: none; }
+.import-table input, .import-table select {
+  width: 100%; padding: 6px 7px; border: 1px solid var(--border); border-radius: 6px;
+  font-size: 0.85rem; font-family: inherit; background: var(--card); color: var(--text);
+}
+.import-table input[type=number] { width: 90px; }
+.import-table input[type=checkbox] { width: auto; }
+.import-row-remove {
+  background: none; border: none; color: var(--neg); cursor: pointer; font-size: 0.95rem; padding: 4px;
+}
+.import-row.excluded { opacity: 0.45; }
+
+/* Kombifeld: echtes <select> (wie beim Typ-Feld, auf dem Handy also der native
+   Picker) + ein Textfeld fuer "Eigener Text", das nur bei Bedarf eingeblendet wird. */
+.combo-wrap { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.combo-select, .combo-text { width: 100%; }
+
+@media (max-width: 640px) {
+  .field-grid { grid-template-columns: 1fr; }
+  .topbar { flex-direction: column; align-items: flex-start; }
+}
