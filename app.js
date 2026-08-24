@@ -16,6 +16,26 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const TYPE_LABELS = { konsole: "Konsole", spiel: "Spiel", zubehoer: "Zubehoer" };
 const PHOTO_BUCKET = "photos";
 
+// Ruft die Edge Function auf und liefert im Fehlerfall, wenn moeglich, die konkrete
+// Fehlermeldung aus dem Funktions-Body statt nur "non-2xx status code".
+async function invokeAnalyzeFn(body) {
+  const { data, error } = await supabase.functions.invoke("analyze-image", { body });
+  if (error) {
+    let detail = error.message;
+    try {
+      if (error.context && typeof error.context.json === "function") {
+        const parsed = await error.context.json();
+        if (parsed?.error) detail = parsed.error;
+      }
+    } catch (_) {
+      // Body war kein JSON o.ae. - bei der generischen Meldung bleiben.
+    }
+    throw new Error(detail);
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
 let currentUser = null;
 let selectedFiles = []; // fuer das Add-Formular
 
@@ -278,22 +298,15 @@ function renderAdd() {
     analyzeStatus.textContent = "Analysiere Foto…";
     try {
       const dataUrl = await fileToDataUrl(selectedFiles[0]);
-      const { data, error } = await supabase.functions.invoke("analyze-image", {
-        body: { action: "recognize", image: dataUrl },
-      });
-      if (error) throw error;
-      if (data.error) {
-        analyzeStatus.textContent = "⚠️ " + data.error;
-      } else {
-        const s = data.suggestion || {};
-        if (s.type) document.getElementById("f-type").value = s.type;
-        if (s.title) document.getElementById("f-title").value = s.title;
-        if (s.console) document.getElementById("f-console").value = s.console;
-        if (s.category) document.getElementById("f-category").value = s.category;
-        if (s.condition) document.getElementById("f-condition").value = s.condition;
-        if (s.details) document.getElementById("f-details").value = s.details;
-        analyzeStatus.textContent = `✅ Vorschlag übernommen (Konfidenz: ${s.confidence || "unbekannt"}). Bitte prüfen und ggf. korrigieren.`;
-      }
+      const data = await invokeAnalyzeFn({ action: "recognize", image: dataUrl });
+      const s = data.suggestion || {};
+      if (s.type) document.getElementById("f-type").value = s.type;
+      if (s.title) document.getElementById("f-title").value = s.title;
+      if (s.console) document.getElementById("f-console").value = s.console;
+      if (s.category) document.getElementById("f-category").value = s.category;
+      if (s.condition) document.getElementById("f-condition").value = s.condition;
+      if (s.details) document.getElementById("f-details").value = s.details;
+      analyzeStatus.textContent = `✅ Vorschlag übernommen (Konfidenz: ${s.confidence || "unbekannt"}). Bitte prüfen und ggf. korrigieren.`;
     } catch (err) {
       analyzeStatus.textContent = "⚠️ Fehler bei der Analyse: " + (err.message || err);
     }
@@ -403,24 +416,17 @@ function renderImport() {
     parseBtn.disabled = true;
     status.textContent = "Analysiere Liste…";
     try {
-      const { data, error } = await supabase.functions.invoke("analyze-image", {
-        body: { action: "parse_list", text },
-      });
-      if (error) throw error;
-      if (data.error) {
-        status.textContent = "⚠️ " + data.error;
-      } else {
-        const items = data.items || [];
-        tbody.innerHTML = "";
-        rowCounter = 0;
-        items.forEach((item) => addRow(item));
-        reviewBox.classList.remove("hidden");
-        addRowBtn.classList.remove("hidden");
-        updateCount();
-        status.textContent = items.length
-          ? `✅ ${items.length} Artikel erkannt. Bitte prüfen und bei Bedarf korrigieren, bevor du importierst.`
-          : "Keine Artikel erkannt – du kannst unten manuell Zeilen hinzufügen.";
-      }
+      const data = await invokeAnalyzeFn({ action: "parse_list", text });
+      const items = data.items || [];
+      tbody.innerHTML = "";
+      rowCounter = 0;
+      items.forEach((item) => addRow(item));
+      reviewBox.classList.remove("hidden");
+      addRowBtn.classList.remove("hidden");
+      updateCount();
+      status.textContent = items.length
+        ? `✅ ${items.length} Artikel erkannt. Bitte prüfen und bei Bedarf korrigieren, bevor du importierst.`
+        : "Keine Artikel erkannt – du kannst unten manuell Zeilen hinzufügen.";
     } catch (err) {
       status.textContent = "⚠️ Fehler bei der Analyse: " + (err.message || err);
     }
@@ -546,23 +552,16 @@ async function renderItem(id) {
     const status = document.getElementById("estimate-status");
     status.textContent = "Schätze Preis…";
     try {
-      const { data, error } = await supabase.functions.invoke("analyze-image", {
-        body: {
-          action: "price",
-          item: {
-            title: document.getElementById("e-title").value,
-            console: document.getElementById("e-console").value,
-            type: document.getElementById("e-type").value,
-            condition: document.getElementById("e-condition").value,
-            details: document.getElementById("e-details").value,
-          },
+      const data = await invokeAnalyzeFn({
+        action: "price",
+        item: {
+          title: document.getElementById("e-title").value,
+          console: document.getElementById("e-console").value,
+          type: document.getElementById("e-type").value,
+          condition: document.getElementById("e-condition").value,
+          details: document.getElementById("e-details").value,
         },
       });
-      if (error) throw error;
-      if (data.error) {
-        status.textContent = "⚠️ " + data.error;
-        return;
-      }
       document.getElementById("e-estimated").value = data.mid ?? "";
       status.textContent = `Geschätzt: ${data.estimated_low}–${data.estimated_high} € — ${data.note || ""}`;
       await supabase.from("items").update({ estimated_value: data.mid, ai_price_note: data.note || "" }).eq("id", id);
