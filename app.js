@@ -283,15 +283,26 @@ async function uploadPhotos(files) {
   return paths;
 }
 
+function isExternalPhotoUrl(p) {
+  return /^https?:\/\//i.test(p || "");
+}
+
 async function getSignedUrlMap(paths) {
   const unique = [...new Set(paths)];
   if (unique.length === 0) return {};
-  const { data, error } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrls(unique, 3600);
-  if (error || !data) return {};
   const map = {};
-  data.forEach((d) => {
-    if (d.signedUrl) map[d.path] = d.signedUrl;
-  });
+  // Externe Bild-URLs (z.B. importierte Cover) direkt verwenden, nur
+  // echte Storage-Pfade brauchen eine Signed URL.
+  const storagePaths = unique.filter((p) => !isExternalPhotoUrl(p));
+  unique.filter(isExternalPhotoUrl).forEach((p) => (map[p] = p));
+  if (storagePaths.length > 0) {
+    const { data, error } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrls(storagePaths, 3600);
+    if (!error && data) {
+      data.forEach((d) => {
+        if (d.signedUrl) map[d.path] = d.signedUrl;
+      });
+    }
+  }
   return map;
 }
 
@@ -789,8 +800,9 @@ async function renderItem(id) {
   document.getElementById("delete-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!confirm("Diesen Artikel wirklich löschen?")) return;
-    if (item.photos?.length) {
-      await supabase.storage.from(PHOTO_BUCKET).remove(item.photos);
+    const storageOnlyPhotos = (item.photos || []).filter((p) => !isExternalPhotoUrl(p));
+    if (storageOnlyPhotos.length) {
+      await supabase.storage.from(PHOTO_BUCKET).remove(storageOnlyPhotos);
     }
     const { error } = await supabase.from("items").delete().eq("id", id);
     if (error) {
@@ -824,7 +836,9 @@ async function renderItemPhotos(item) {
       if (!confirm("Foto entfernen?")) return;
       const idx = Number(btn.dataset.idx);
       const path = photos[idx];
-      await supabase.storage.from(PHOTO_BUCKET).remove([path]);
+      if (!isExternalPhotoUrl(path)) {
+        await supabase.storage.from(PHOTO_BUCKET).remove([path]);
+      }
       const newPhotos = photos.filter((_, i) => i !== idx);
       await supabase.from("items").update({ photos: newPhotos }).eq("id", item.id);
       item.photos = newPhotos;
