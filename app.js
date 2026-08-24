@@ -361,9 +361,9 @@ function importRowHtml(row, idx) {
       <option value="zubehoer" ${row.type === "zubehoer" ? "selected" : ""}>Zubehoer</option>
     </select></td>
     <td><input type="text" class="imp-title" value="${t(row.title)}" placeholder="Titel"></td>
-    <td><input type="text" class="imp-console" value="${t(row.console)}" placeholder="Konsole"></td>
-    <td><input type="text" class="imp-category" value="${t(row.category)}" placeholder="Kategorie"></td>
-    <td><input type="text" class="imp-condition" value="${t(row.condition)}" placeholder="Zustand"></td>
+    <td><input type="text" class="imp-console" value="${t(row.console)}" placeholder="Konsole" list="console-list"></td>
+    <td><input type="text" class="imp-category" value="${t(row.category)}" placeholder="Kategorie" list="category-list"></td>
+    <td><input type="text" class="imp-condition" value="${t(row.condition)}" placeholder="Zustand" list="condition-list"></td>
     <td><input type="number" step="0.01" min="0" class="imp-purchase" value="${row.purchase_price ?? ""}"></td>
     <td><input type="number" step="0.01" min="0" class="imp-estimated" value="${row.estimated_value ?? ""}"></td>
     <td><button type="button" class="import-row-remove" title="Zeile entfernen">✕</button></td>

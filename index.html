@@ -41,6 +41,36 @@
   <main id="main"></main>
 </div>
 
+<!-- Gemeinsame Vorschlagslisten fuer Konsole/Kategorie/Zustand.
+     Per <input list="..."> gibt's ein Dropdown mit Vorschlägen, man kann aber
+     trotzdem jederzeit frei etwas anderes eintippen. -->
+<datalist id="console-list">
+  <option value="Nintendo Switch"><option value="Nintendo Switch 2"><option value="Nintendo Switch Lite">
+  <option value="Nintendo GameCube"><option value="Nintendo Wii"><option value="Nintendo Wii U">
+  <option value="Nintendo 64"><option value="Super Nintendo (SNES)"><option value="NES">
+  <option value="Game Boy"><option value="Game Boy Color"><option value="Game Boy Advance">
+  <option value="Nintendo DS"><option value="Nintendo DS Lite"><option value="Nintendo DSi">
+  <option value="Nintendo 3DS"><option value="New Nintendo 3DS">
+  <option value="PlayStation"><option value="PlayStation 2"><option value="PlayStation 3">
+  <option value="PlayStation 4"><option value="PlayStation 5"><option value="PSP"><option value="PS Vita">
+  <option value="Xbox"><option value="Xbox 360"><option value="Xbox One"><option value="Xbox Series X/S">
+  <option value="Sega Mega Drive"><option value="Sega Saturn"><option value="Sega Dreamcast">
+  <option value="PC">
+</datalist>
+<datalist id="category-list">
+  <option value="Jump'n'Run"><option value="Shooter"><option value="RPG"><option value="Sport">
+  <option value="Rennspiel"><option value="Adventure"><option value="Puzzle"><option value="Prügelspiel">
+  <option value="Strategie"><option value="Simulation"><option value="Party"><option value="Horror">
+  <option value="Musik/Rhythmus"><option value="Heimkonsole"><option value="Handheld">
+  <option value="Controller"><option value="Kabel"><option value="Netzteil"><option value="Speicherkarte">
+  <option value="Sonstiges">
+</datalist>
+<datalist id="condition-list">
+  <option value="Neu/OVP"><option value="Sehr guter Zustand"><option value="Guter Zustand">
+  <option value="Gebrauchsspuren"><option value="Ohne Verpackung"><option value="Ohne Anleitung">
+  <option value="Defekt/Ersatzteile">
+</datalist>
+
 <!-- Templates -->
 <template id="tpl-index">
   <section class="stats" id="stats"></section>
@@ -95,18 +125,9 @@
       <label>Titel / Bezeichnung<input type="text" name="title" id="f-title" placeholder="z. B. Super Mario Sunshine"></label>
       <label>Konsole / Plattform
         <input type="text" name="console" id="f-console" placeholder="z. B. Nintendo GameCube" list="console-list">
-        <datalist id="console-list">
-          <option value="Nintendo Switch"><option value="Nintendo Switch 2"><option value="Nintendo GameCube">
-          <option value="Nintendo Wii"><option value="Nintendo Wii U"><option value="Nintendo 64">
-          <option value="Game Boy"><option value="Game Boy Advance"><option value="Nintendo DS"><option value="Nintendo 3DS">
-          <option value="PlayStation"><option value="PlayStation 2"><option value="PlayStation 3">
-          <option value="PlayStation 4"><option value="PlayStation 5"><option value="PSP"><option value="PS Vita">
-          <option value="Xbox"><option value="Xbox 360"><option value="Xbox One"><option value="Xbox Series X/S">
-          <option value="Sega Mega Drive"><option value="Sega Dreamcast">
-        </datalist>
       </label>
-      <label>Kategorie / Genre<input type="text" name="category" id="f-category" placeholder="z. B. Jump'n'Run, Handheld, Controller"></label>
-      <label>Zustand<input type="text" name="condition" id="f-condition" placeholder="z. B. OVP, wie neu"></label>
+      <label>Kategorie / Genre<input type="text" name="category" id="f-category" placeholder="z. B. Jump'n'Run, Handheld, Controller" list="category-list"></label>
+      <label>Zustand<input type="text" name="condition" id="f-condition" placeholder="z. B. OVP, wie neu" list="condition-list"></label>
       <label class="full">Details<textarea name="details" id="f-details" rows="2" placeholder="Region, Edition, Bundle-Inhalt, Besonderheiten…"></textarea></label>
       <label>Kaufpreis (€)<input type="number" step="0.01" min="0" name="purchase_price" id="f-purchase"></label>
       <label>Geschätzter Verkaufswert (€)<input type="number" step="0.01" min="0" name="estimated_value" id="f-estimated"></label>
@@ -186,9 +207,9 @@
           </select>
         </label>
         <label>Titel / Bezeichnung<input type="text" name="title" id="e-title"></label>
-        <label>Konsole / Plattform<input type="text" name="console" id="e-console"></label>
-        <label>Kategorie / Genre<input type="text" name="category" id="e-category"></label>
-        <label>Zustand<input type="text" name="condition" id="e-condition"></label>
+        <label>Konsole / Plattform<input type="text" name="console" id="e-console" list="console-list"></label>
+        <label>Kategorie / Genre<input type="text" name="category" id="e-category" list="category-list"></label>
+        <label>Zustand<input type="text" name="condition" id="e-condition" list="condition-list"></label>
         <label class="full">Details<textarea name="details" id="e-details" rows="2"></textarea></label>
         <label>Kaufpreis (€)<input type="number" step="0.01" min="0" name="purchase_price" id="e-purchase"></label>
         <label>Geschätzter Verkaufswert (€)<input type="number" step="0.01" min="0" name="estimated_value" id="e-estimated"></label>
