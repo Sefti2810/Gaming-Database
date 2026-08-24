@@ -16,6 +16,97 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const TYPE_LABELS = { konsole: "Konsole", spiel: "Spiel", zubehoer: "Zubehoer" };
 const PHOTO_BUCKET = "photos";
 
+// ---------------------------------------------------------------------
+// Dropdown-Vorschlaege fuer Konsole/Kategorie/Zustand, inkl. freier Texteingabe.
+// (Ein natives <input list="..."> haette hier gereicht, verhaelt sich aber je nach
+// Browser unterschiedlich - v.a. Safari zeigt die Vorschlaege oft gar nicht an.
+// Deshalb ein eigenes, leichtes Dropdown, das ueberall gleich funktioniert.)
+// ---------------------------------------------------------------------
+const CONSOLE_OPTIONS = [
+  "Nintendo Switch", "Nintendo Switch 2", "Nintendo Switch Lite", "Nintendo GameCube",
+  "Nintendo Wii", "Nintendo Wii U", "Nintendo 64", "Super Nintendo (SNES)", "NES",
+  "Game Boy", "Game Boy Color", "Game Boy Advance", "Nintendo DS", "Nintendo DS Lite",
+  "Nintendo DSi", "Nintendo 3DS", "New Nintendo 3DS",
+  "PlayStation", "PlayStation 2", "PlayStation 3", "PlayStation 4", "PlayStation 5",
+  "PSP", "PS Vita",
+  "Xbox", "Xbox 360", "Xbox One", "Xbox Series X/S",
+  "Sega Mega Drive", "Sega Saturn", "Sega Dreamcast", "PC",
+];
+const CATEGORY_OPTIONS = [
+  "Jump'n'Run", "Shooter", "RPG", "Sport", "Rennspiel", "Adventure", "Puzzle",
+  "Prügelspiel", "Strategie", "Simulation", "Party", "Horror", "Musik/Rhythmus",
+  "Heimkonsole", "Handheld", "Controller", "Kabel", "Netzteil", "Speicherkarte",
+  "Sonstiges",
+];
+const CONDITION_OPTIONS = [
+  "Neu/OVP", "Sehr guter Zustand", "Guter Zustand", "Gebrauchsspuren",
+  "Ohne Verpackung", "Ohne Anleitung", "Defekt/Ersatzteile",
+];
+
+// Verwandelt ein normales Text-Input in ein Kombifeld: Klick/Fokus zeigt eine
+// Dropdown-Liste mit Vorschlaegen (gefiltert nach dem bereits Eingetippten),
+// man kann aber jederzeit auch einen eigenen Text eingeben, der nicht in der
+// Liste steht - das Feld bleibt ein ganz normales <input>.
+function enhanceCombo(input, options) {
+  if (!input || input.dataset.comboReady) return;
+  input.dataset.comboReady = "1";
+  input.setAttribute("autocomplete", "off");
+
+  const wrap = document.createElement("div");
+  wrap.className = "combo-wrap";
+  input.parentNode.insertBefore(wrap, input);
+  wrap.appendChild(input);
+
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "combo-toggle";
+  toggle.textContent = "▾";
+  toggle.tabIndex = -1;
+  wrap.appendChild(toggle);
+
+  const list = document.createElement("ul");
+  list.className = "combo-list hidden";
+  wrap.appendChild(list);
+
+  function render(filterVal) {
+    const f = (filterVal || "").trim().toLowerCase();
+    const matches = f ? options.filter((o) => o.toLowerCase().includes(f)) : options;
+    list.innerHTML = matches.length
+      ? matches.map((o) => `<li>${escapeHtml(o)}</li>`).join("")
+      : `<li class="combo-empty">Kein Vorschlag – eigener Text wird übernommen</li>`;
+  }
+  function open() {
+    render(input.value);
+    list.classList.remove("hidden");
+  }
+  function close() {
+    list.classList.add("hidden");
+  }
+
+  input.addEventListener("focus", open);
+  input.addEventListener("input", open);
+  toggle.addEventListener("click", () => {
+    if (list.classList.contains("hidden")) {
+      input.focus();
+      open();
+    } else {
+      close();
+    }
+  });
+  list.addEventListener("mousedown", (e) => {
+    const li = e.target.closest("li");
+    if (!li || li.classList.contains("combo-empty")) return;
+    e.preventDefault();
+    input.value = li.textContent;
+    close();
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  document.addEventListener("click", (e) => {
+    if (!wrap.contains(e.target)) close();
+  });
+}
+
 // Ruft die Edge Function auf und liefert im Fehlerfall, wenn moeglich, die konkrete
 // Fehlermeldung aus dem Funktions-Body statt nur "non-2xx status code".
 async function invokeAnalyzeFn(body) {
@@ -274,6 +365,10 @@ function renderAdd() {
   main.appendChild(document.getElementById("tpl-add").content.cloneNode(true));
   selectedFiles = [];
 
+  enhanceCombo(document.getElementById("f-console"), CONSOLE_OPTIONS);
+  enhanceCombo(document.getElementById("f-category"), CATEGORY_OPTIONS);
+  enhanceCombo(document.getElementById("f-condition"), CONDITION_OPTIONS);
+
   const photoInput = document.getElementById("photo-input");
   const photoPreviews = document.getElementById("photo-previews");
   const analyzeBtn = document.getElementById("analyze-btn");
@@ -361,9 +456,9 @@ function importRowHtml(row, idx) {
       <option value="zubehoer" ${row.type === "zubehoer" ? "selected" : ""}>Zubehoer</option>
     </select></td>
     <td><input type="text" class="imp-title" value="${t(row.title)}" placeholder="Titel"></td>
-    <td><input type="text" class="imp-console" value="${t(row.console)}" placeholder="Konsole" list="console-list"></td>
-    <td><input type="text" class="imp-category" value="${t(row.category)}" placeholder="Kategorie" list="category-list"></td>
-    <td><input type="text" class="imp-condition" value="${t(row.condition)}" placeholder="Zustand" list="condition-list"></td>
+    <td><input type="text" class="imp-console" value="${t(row.console)}" placeholder="Konsole"></td>
+    <td><input type="text" class="imp-category" value="${t(row.category)}" placeholder="Kategorie"></td>
+    <td><input type="text" class="imp-condition" value="${t(row.condition)}" placeholder="Zustand"></td>
     <td><input type="number" step="0.01" min="0" class="imp-purchase" value="${row.purchase_price ?? ""}"></td>
     <td><input type="number" step="0.01" min="0" class="imp-estimated" value="${row.estimated_value ?? ""}"></td>
     <td><button type="button" class="import-row-remove" title="Zeile entfernen">✕</button></td>
@@ -405,6 +500,9 @@ function renderImport() {
       tr.classList.toggle("excluded", !e.target.checked);
       updateCount();
     });
+    enhanceCombo(tr.querySelector(".imp-console"), CONSOLE_OPTIONS);
+    enhanceCombo(tr.querySelector(".imp-category"), CATEGORY_OPTIONS);
+    enhanceCombo(tr.querySelector(".imp-condition"), CONDITION_OPTIONS);
   }
 
   parseBtn.addEventListener("click", async () => {
@@ -501,6 +599,10 @@ async function renderItem(id) {
   document.getElementById("e-category").value = item.category || "";
   document.getElementById("e-condition").value = item.condition_text || "";
   document.getElementById("e-details").value = item.details || "";
+
+  enhanceCombo(document.getElementById("e-console"), CONSOLE_OPTIONS);
+  enhanceCombo(document.getElementById("e-category"), CATEGORY_OPTIONS);
+  enhanceCombo(document.getElementById("e-condition"), CONDITION_OPTIONS);
   document.getElementById("e-purchase").value = item.purchase_price ?? "";
   document.getElementById("e-estimated").value = item.estimated_value ?? "";
   document.getElementById("e-notes").value = item.notes || "";
