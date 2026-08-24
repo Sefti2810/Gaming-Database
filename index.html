@@ -32,6 +32,7 @@
     <nav>
       <a href="#/">Übersicht</a>
       <a href="#/add" class="btn-primary-nav">+ Artikel</a>
+      <a href="#/import">Import</a>
       <button id="export-btn" class="link-btn">Export</button>
       <button id="logout-btn" class="link-btn">Abmelden</button>
     </nav>
@@ -117,6 +118,54 @@
     </div>
     <div id="save-status" class="status-text"></div>
   </form>
+</template>
+
+<template id="tpl-import">
+  <h1>Bestehende Sammlung importieren</h1>
+  <div class="notice">
+    Füg unten deine Liste ein – egal ob Stichpunkte, Notizen oder ganze Sätze
+    (z. B. „GameCube mit 2 Controllern, 30€ gezahlt", „Zelda Wind Waker, OVP").
+    Die KI zerlegt das in einzelne Artikel, die du danach prüfen und korrigieren kannst,
+    bevor irgendetwas gespeichert wird.
+  </div>
+  <div class="item-form">
+    <label class="full" style="display:flex;flex-direction:column;gap:5px;font-size:0.85rem;color:var(--text-muted);margin-bottom:14px;">
+      Deine Liste
+      <textarea id="import-text" rows="8" placeholder="z. B.&#10;PS2 gekauft für 40€, funktioniert einwandfrei&#10;GTA San Andreas, OVP, ca. 15€ wert&#10;Nintendo DS Lite, weiß, mit Ladekabel"></textarea>
+    </label>
+    <div class="form-actions">
+      <button type="button" id="parse-btn" class="btn-primary">🤖 Liste analysieren</button>
+      <button type="button" id="add-row-btn" class="btn-secondary hidden">+ Zeile manuell hinzufügen</button>
+    </div>
+    <div id="import-status" class="status-text"></div>
+  </div>
+
+  <div id="import-review" class="import-review hidden">
+    <h2>Gefundene Artikel – bitte prüfen</h2>
+    <div class="table-scroll">
+      <table class="import-table" id="import-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Typ</th>
+            <th>Titel</th>
+            <th>Konsole</th>
+            <th>Kategorie</th>
+            <th>Zustand</th>
+            <th>Kaufpreis €</th>
+            <th>Wert €</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="import-tbody"></tbody>
+      </table>
+    </div>
+    <div class="form-actions">
+      <button type="button" id="import-confirm-btn" class="btn-primary">Ausgewählte Artikel importieren</button>
+      <span id="import-count" class="status-text"></span>
+    </div>
+    <div id="import-final-status" class="status-text"></div>
+  </div>
 </template>
 
 <template id="tpl-item">

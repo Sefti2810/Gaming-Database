@@ -76,6 +76,8 @@ function router() {
     renderIndex();
   } else if (hash === "#/add") {
     renderAdd();
+  } else if (hash === "#/import") {
+    renderImport();
   } else if (hash.startsWith("#/item/")) {
     const id = hash.split("/")[2];
     renderItem(id);
@@ -331,6 +333,144 @@ function parseFloatOrNull(v) {
   if (v === "" || v == null) return null;
   const n = parseFloat(v);
   return Number.isNaN(n) ? null : n;
+}
+
+// ---------------------------------------------------------------------
+// Bestehende Sammlung importieren (Text -> KI -> Review-Tabelle -> Bulk-Insert)
+// ---------------------------------------------------------------------
+function importRowHtml(row, idx) {
+  const t = (v) => escapeHtml(v ?? "");
+  return `<tr class="import-row" data-idx="${idx}">
+    <td><input type="checkbox" class="imp-include" checked></td>
+    <td><select class="imp-type">
+      <option value="spiel" ${row.type === "spiel" ? "selected" : ""}>Spiel</option>
+      <option value="konsole" ${row.type === "konsole" ? "selected" : ""}>Konsole</option>
+      <option value="zubehoer" ${row.type === "zubehoer" ? "selected" : ""}>Zubehoer</option>
+    </select></td>
+    <td><input type="text" class="imp-title" value="${t(row.title)}" placeholder="Titel"></td>
+    <td><input type="text" class="imp-console" value="${t(row.console)}" placeholder="Konsole"></td>
+    <td><input type="text" class="imp-category" value="${t(row.category)}" placeholder="Kategorie"></td>
+    <td><input type="text" class="imp-condition" value="${t(row.condition)}" placeholder="Zustand"></td>
+    <td><input type="number" step="0.01" min="0" class="imp-purchase" value="${row.purchase_price ?? ""}"></td>
+    <td><input type="number" step="0.01" min="0" class="imp-estimated" value="${row.estimated_value ?? ""}"></td>
+    <td><button type="button" class="import-row-remove" title="Zeile entfernen">✕</button></td>
+  </tr>`;
+}
+
+function renderImport() {
+  const main = document.getElementById("main");
+  main.innerHTML = "";
+  main.appendChild(document.getElementById("tpl-import").content.cloneNode(true));
+
+  const textarea = document.getElementById("import-text");
+  const parseBtn = document.getElementById("parse-btn");
+  const addRowBtn = document.getElementById("add-row-btn");
+  const status = document.getElementById("import-status");
+  const reviewBox = document.getElementById("import-review");
+  const tbody = document.getElementById("import-tbody");
+  const confirmBtn = document.getElementById("import-confirm-btn");
+  const countLabel = document.getElementById("import-count");
+  const finalStatus = document.getElementById("import-final-status");
+
+  let rowCounter = 0;
+
+  function updateCount() {
+    const total = tbody.querySelectorAll("tr").length;
+    const included = tbody.querySelectorAll(".imp-include:checked").length;
+    countLabel.textContent = total ? `${included} von ${total} ausgewählt` : "";
+  }
+
+  function addRow(row) {
+    const idx = rowCounter++;
+    tbody.insertAdjacentHTML("beforeend", importRowHtml(row || {}, idx));
+    const tr = tbody.querySelector(`tr[data-idx="${idx}"]`);
+    tr.querySelector(".import-row-remove").addEventListener("click", () => {
+      tr.remove();
+      updateCount();
+    });
+    tr.querySelector(".imp-include").addEventListener("change", (e) => {
+      tr.classList.toggle("excluded", !e.target.checked);
+      updateCount();
+    });
+  }
+
+  parseBtn.addEventListener("click", async () => {
+    const text = textarea.value.trim();
+    if (!text) {
+      status.textContent = "Bitte zuerst deine Liste in das Feld einfügen.";
+      return;
+    }
+    parseBtn.disabled = true;
+    status.textContent = "Analysiere Liste…";
+    try {
+      const { data, error } = await supabase.functions.invoke("analyze-image", {
+        body: { action: "parse_list", text },
+      });
+      if (error) throw error;
+      if (data.error) {
+        status.textContent = "⚠️ " + data.error;
+      } else {
+        const items = data.items || [];
+        tbody.innerHTML = "";
+        rowCounter = 0;
+        items.forEach((item) => addRow(item));
+        reviewBox.classList.remove("hidden");
+        addRowBtn.classList.remove("hidden");
+        updateCount();
+        status.textContent = items.length
+          ? `✅ ${items.length} Artikel erkannt. Bitte prüfen und bei Bedarf korrigieren, bevor du importierst.`
+          : "Keine Artikel erkannt – du kannst unten manuell Zeilen hinzufügen.";
+      }
+    } catch (err) {
+      status.textContent = "⚠️ Fehler bei der Analyse: " + (err.message || err);
+    }
+    parseBtn.disabled = false;
+  });
+
+  addRowBtn.addEventListener("click", () => {
+    addRow({});
+    reviewBox.classList.remove("hidden");
+    updateCount();
+  });
+
+  confirmBtn.addEventListener("click", async () => {
+    const rows = Array.from(tbody.querySelectorAll("tr"));
+    const toImport = [];
+    rows.forEach((tr) => {
+      if (!tr.querySelector(".imp-include").checked) return;
+      const title = tr.querySelector(".imp-title").value.trim();
+      const consoleVal = tr.querySelector(".imp-console").value.trim();
+      if (!title && !consoleVal) return; // leere Zeile ueberspringen
+      toImport.push({
+        user_id: currentUser.id,
+        type: tr.querySelector(".imp-type").value,
+        title,
+        console: consoleVal,
+        category: tr.querySelector(".imp-category").value.trim(),
+        condition_text: tr.querySelector(".imp-condition").value.trim(),
+        details: "",
+        purchase_price: parseFloatOrNull(tr.querySelector(".imp-purchase").value),
+        estimated_value: parseFloatOrNull(tr.querySelector(".imp-estimated").value),
+        notes: "",
+        photos: [],
+      });
+    });
+    if (toImport.length === 0) {
+      finalStatus.textContent = "Keine Artikel zum Importieren ausgewählt.";
+      return;
+    }
+    confirmBtn.disabled = true;
+    finalStatus.textContent = `Importiere ${toImport.length} Artikel…`;
+    try {
+      const { error } = await supabase.from("items").insert(toImport);
+      if (error) throw error;
+      flash(`${toImport.length} Artikel importiert.`);
+      location.hash = "#/";
+    } catch (err) {
+      finalStatus.textContent = "⚠️ Fehler beim Import: " + (err.message || err);
+      confirmBtn.disabled = false;
+    }
+  });
 }
 
 // ---------------------------------------------------------------------
