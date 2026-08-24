@@ -335,10 +335,14 @@ async function renderIndex() {
 
   renderStats(items);
   populateConsoleFilter(items);
+  setupSaleStatusFilter();
   updateViewButtons();
   applyFiltersAndRender(items);
 
-  document.getElementById("filter-form").addEventListener("input", () => applyFiltersAndRender(items));
+  document.getElementById("filter-form").addEventListener("input", () => {
+    updateSaleStatusSummary();
+    applyFiltersAndRender(items);
+  });
   document.getElementById("view-grid-btn").addEventListener("click", () => setView("grid", items));
   document.getElementById("view-list-btn").addEventListener("click", () => setView("list", items));
 }
@@ -390,19 +394,53 @@ function populateConsoleFilter(items) {
   });
 }
 
+function updateSaleStatusSummary() {
+  const details = document.getElementById("sale-status-filter");
+  if (!details) return;
+  const boxes = Array.from(details.querySelectorAll('input[name="sale_status"]'));
+  const checked = boxes.filter((b) => b.checked).length;
+  const countEl = details.querySelector(".ms-count");
+  if (countEl) countEl.textContent = checked === boxes.length ? "" : `(${checked}/${boxes.length})`;
+}
+
+function setupSaleStatusFilter() {
+  const details = document.getElementById("sale-status-filter");
+  if (!details) return;
+  updateSaleStatusSummary();
+
+  details.querySelector(".ms-all")?.addEventListener("click", () => {
+    details.querySelectorAll('input[name="sale_status"]').forEach((b) => (b.checked = true));
+    updateSaleStatusSummary();
+    details.dispatchEvent(new Event("change-request"));
+    document.getElementById("filter-form").dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  details.querySelector(".ms-none")?.addEventListener("click", () => {
+    details.querySelectorAll('input[name="sale_status"]').forEach((b) => (b.checked = false));
+    updateSaleStatusSummary();
+    document.getElementById("filter-form").dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+  // Ausserhalb geklickt -> Dropdown schliessen.
+  document.addEventListener("click", (e) => {
+    if (!details.open) return;
+    if (!details.contains(e.target)) details.open = false;
+  });
+}
+
 async function applyFiltersAndRender(items) {
   const form = document.getElementById("filter-form");
   const fd = new FormData(form);
   const q = (fd.get("q") || "").toString().toLowerCase();
   const type = fd.get("type");
   const cons = fd.get("console");
-  const saleStatus = fd.get("sale_status");
+  const saleStatuses = fd.getAll("sale_status").map(String);
+  const allSaleStatusCount = form.querySelectorAll('input[name="sale_status"]').length;
   const sort = fd.get("sort");
 
   let filtered = items.filter((i) => {
     if (type && i.type !== type) return false;
     if (cons && i.console !== cons) return false;
-    if (saleStatus && (i.sale_status || "") !== saleStatus) return false;
+    if (saleStatuses.length < allSaleStatusCount && !saleStatuses.includes(i.sale_status || "")) return false;
     if (q) {
       const hay = `${i.title} ${i.console} ${i.details} ${i.notes}`.toLowerCase();
       if (!hay.includes(q)) return false;
@@ -464,433 +502,4 @@ async function applyFiltersAndRender(items) {
           <span class="badge badge-${item.type}">${TYPE_LABELS[item.type] || item.type}</span>
         </div>
         <div class="card-body">
-          <div class="card-title">${escapeHtml(item.title) || "(ohne Titel)"}</div>
-          <div class="card-console">${escapeHtml(item.console)}</div>
-          ${item.category ? `<div class="card-category">${escapeHtml(item.category)}</div>` : ""}
-          ${item.sale_status ? `<div class="card-sale">${saleBadgeHtml(item.sale_status)}</div>` : ""}
-          <div class="card-prices">
-            <span>Kauf: ${item.purchase_price != null ? Number(item.purchase_price).toFixed(2) + " €" : "–"}</span>
-            <span>Wert: ${item.estimated_value != null ? Number(item.estimated_value).toFixed(2) + " €" : "–"}</span>
-          </div>
-        </div>
-      </a>`;
-    })
-    .join("");
-}
-
-// ---------------------------------------------------------------------
-// Artikel hinzufügen
-// ---------------------------------------------------------------------
-function renderAdd() {
-  const main = document.getElementById("main");
-  main.innerHTML = "";
-  main.appendChild(document.getElementById("tpl-add").content.cloneNode(true));
-  selectedFiles = [];
-
-  const consoleCombo = enhanceCombo(document.getElementById("f-console"), CONSOLE_OPTIONS);
-  const categoryCombo = enhanceCombo(document.getElementById("f-category"), CATEGORY_OPTIONS);
-  const conditionCombo = enhanceCombo(document.getElementById("f-condition"), CONDITION_OPTIONS);
-
-  const photoInput = document.getElementById("photo-input");
-  const photoPreviews = document.getElementById("photo-previews");
-  const analyzeBtn = document.getElementById("analyze-btn");
-  const analyzeStatus = document.getElementById("analyze-status");
-  const dropText = document.getElementById("photo-drop-text");
-
-  photoInput.addEventListener("change", () => {
-    selectedFiles = Array.from(photoInput.files);
-    photoPreviews.innerHTML = "";
-    selectedFiles.forEach((f) => {
-      const img = document.createElement("img");
-      img.src = URL.createObjectURL(f);
-      photoPreviews.appendChild(img);
-    });
-    dropText.textContent = selectedFiles.length ? `${selectedFiles.length} Foto(s) ausgewählt` : "📷 Foto aufnehmen oder Datei(en) auswählen";
-    analyzeBtn.disabled = selectedFiles.length === 0;
-  });
-
-  analyzeBtn.addEventListener("click", async () => {
-    if (selectedFiles.length === 0) return;
-    analyzeBtn.disabled = true;
-    analyzeStatus.textContent = "Analysiere Foto…";
-    try {
-      const dataUrl = await fileToDataUrl(selectedFiles[0]);
-      const data = await invokeAnalyzeFn({ action: "recognize", image: dataUrl });
-      const s = data.suggestion || {};
-      if (s.type) document.getElementById("f-type").value = s.type;
-      if (s.title) document.getElementById("f-title").value = s.title;
-      if (s.console) consoleCombo.setValue(s.console);
-      if (s.category) categoryCombo.setValue(s.category);
-      if (s.condition) conditionCombo.setValue(s.condition);
-      if (s.details) document.getElementById("f-details").value = s.details;
-      analyzeStatus.textContent = `✅ Vorschlag übernommen (Konfidenz: ${s.confidence || "unbekannt"}). Bitte prüfen und ggf. korrigieren.`;
-    } catch (err) {
-      analyzeStatus.textContent = "⚠️ Fehler bei der Analyse: " + (err.message || err);
-    }
-    analyzeBtn.disabled = false;
-  });
-
-  document.getElementById("item-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const status = document.getElementById("save-status");
-    status.textContent = "Speichere…";
-    try {
-      const photos = selectedFiles.length ? await uploadPhotos(selectedFiles) : [];
-      const payload = {
-        user_id: currentUser.id,
-        type: document.getElementById("f-type").value,
-        title: document.getElementById("f-title").value.trim(),
-        console: document.getElementById("f-console").value.trim(),
-        category: document.getElementById("f-category").value.trim(),
-        condition_text: document.getElementById("f-condition").value.trim(),
-        details: document.getElementById("f-details").value.trim(),
-        purchase_price: parseFloatOrNull(document.getElementById("f-purchase").value),
-        estimated_value: parseFloatOrNull(document.getElementById("f-estimated").value),
-        sale_status: document.getElementById("f-sale-status").value || null,
-        notes: document.getElementById("f-notes").value.trim(),
-        photos,
-      };
-      const { error } = await supabase.from("items").insert(payload);
-      if (error) throw error;
-      flash("Artikel gespeichert.");
-      location.hash = "#/";
-    } catch (err) {
-      status.textContent = "⚠️ Fehler beim Speichern: " + (err.message || err);
-    }
-  });
-}
-
-function parseFloatOrNull(v) {
-  if (v === "" || v == null) return null;
-  const n = parseFloat(v);
-  return Number.isNaN(n) ? null : n;
-}
-
-// ---------------------------------------------------------------------
-// Bestehende Sammlung importieren (Text -> KI -> Review-Tabelle -> Bulk-Insert)
-// ---------------------------------------------------------------------
-function importRowHtml(row, idx) {
-  const t = (v) => escapeHtml(v ?? "");
-  return `<tr class="import-row" data-idx="${idx}">
-    <td><input type="checkbox" class="imp-include" checked></td>
-    <td><select class="imp-type">
-      <option value="spiel" ${row.type === "spiel" ? "selected" : ""}>Spiel</option>
-      <option value="konsole" ${row.type === "konsole" ? "selected" : ""}>Konsole</option>
-      <option value="zubehoer" ${row.type === "zubehoer" ? "selected" : ""}>Zubehoer</option>
-    </select></td>
-    <td><input type="text" class="imp-title" value="${t(row.title)}" placeholder="Titel"></td>
-    <td><input type="text" class="imp-console" value="${t(row.console)}" placeholder="Konsole"></td>
-    <td><input type="text" class="imp-category" value="${t(row.category)}" placeholder="Kategorie"></td>
-    <td><input type="text" class="imp-condition" value="${t(row.condition)}" placeholder="Zustand"></td>
-    <td><input type="number" step="0.01" min="0" class="imp-purchase" value="${row.purchase_price ?? ""}"></td>
-    <td><input type="number" step="0.01" min="0" class="imp-estimated" value="${row.estimated_value ?? ""}"></td>
-    <td><button type="button" class="import-row-remove" title="Zeile entfernen">✕</button></td>
-  </tr>`;
-}
-
-function renderImport() {
-  const main = document.getElementById("main");
-  main.innerHTML = "";
-  main.appendChild(document.getElementById("tpl-import").content.cloneNode(true));
-
-  const textarea = document.getElementById("import-text");
-  const parseBtn = document.getElementById("parse-btn");
-  const addRowBtn = document.getElementById("add-row-btn");
-  const status = document.getElementById("import-status");
-  const reviewBox = document.getElementById("import-review");
-  const tbody = document.getElementById("import-tbody");
-  const confirmBtn = document.getElementById("import-confirm-btn");
-  const countLabel = document.getElementById("import-count");
-  const finalStatus = document.getElementById("import-final-status");
-
-  let rowCounter = 0;
-
-  function updateCount() {
-    const total = tbody.querySelectorAll("tr").length;
-    const included = tbody.querySelectorAll(".imp-include:checked").length;
-    countLabel.textContent = total ? `${included} von ${total} ausgewählt` : "";
-  }
-
-  function addRow(row) {
-    const idx = rowCounter++;
-    tbody.insertAdjacentHTML("beforeend", importRowHtml(row || {}, idx));
-    const tr = tbody.querySelector(`tr[data-idx="${idx}"]`);
-    tr.querySelector(".import-row-remove").addEventListener("click", () => {
-      tr.remove();
-      updateCount();
-    });
-    tr.querySelector(".imp-include").addEventListener("change", (e) => {
-      tr.classList.toggle("excluded", !e.target.checked);
-      updateCount();
-    });
-    enhanceCombo(tr.querySelector(".imp-console"), CONSOLE_OPTIONS);
-    enhanceCombo(tr.querySelector(".imp-category"), CATEGORY_OPTIONS);
-    enhanceCombo(tr.querySelector(".imp-condition"), CONDITION_OPTIONS);
-  }
-
-  parseBtn.addEventListener("click", async () => {
-    const text = textarea.value.trim();
-    if (!text) {
-      status.textContent = "Bitte zuerst deine Liste in das Feld einfügen.";
-      return;
-    }
-    parseBtn.disabled = true;
-    status.textContent = "Analysiere Liste…";
-    try {
-      const data = await invokeAnalyzeFn({ action: "parse_list", text });
-      const items = data.items || [];
-      tbody.innerHTML = "";
-      rowCounter = 0;
-      items.forEach((item) => addRow(item));
-      reviewBox.classList.remove("hidden");
-      addRowBtn.classList.remove("hidden");
-      updateCount();
-      status.textContent = items.length
-        ? `✅ ${items.length} Artikel erkannt. Bitte prüfen und bei Bedarf korrigieren, bevor du importierst.`
-        : "Keine Artikel erkannt – du kannst unten manuell Zeilen hinzufügen.";
-    } catch (err) {
-      status.textContent = "⚠️ Fehler bei der Analyse: " + (err.message || err);
-    }
-    parseBtn.disabled = false;
-  });
-
-  addRowBtn.addEventListener("click", () => {
-    addRow({});
-    reviewBox.classList.remove("hidden");
-    updateCount();
-  });
-
-  confirmBtn.addEventListener("click", async () => {
-    const rows = Array.from(tbody.querySelectorAll("tr"));
-    const toImport = [];
-    rows.forEach((tr) => {
-      if (!tr.querySelector(".imp-include").checked) return;
-      const title = tr.querySelector(".imp-title").value.trim();
-      const consoleVal = tr.querySelector(".imp-console").value.trim();
-      if (!title && !consoleVal) return; // leere Zeile ueberspringen
-      toImport.push({
-        user_id: currentUser.id,
-        type: tr.querySelector(".imp-type").value,
-        title,
-        console: consoleVal,
-        category: tr.querySelector(".imp-category").value.trim(),
-        condition_text: tr.querySelector(".imp-condition").value.trim(),
-        details: "",
-        purchase_price: parseFloatOrNull(tr.querySelector(".imp-purchase").value),
-        estimated_value: parseFloatOrNull(tr.querySelector(".imp-estimated").value),
-        notes: "",
-        photos: [],
-      });
-    });
-    if (toImport.length === 0) {
-      finalStatus.textContent = "Keine Artikel zum Importieren ausgewählt.";
-      return;
-    }
-    confirmBtn.disabled = true;
-    finalStatus.textContent = `Importiere ${toImport.length} Artikel…`;
-    try {
-      const { error } = await supabase.from("items").insert(toImport);
-      if (error) throw error;
-      flash(`${toImport.length} Artikel importiert.`);
-      location.hash = "#/";
-    } catch (err) {
-      finalStatus.textContent = "⚠️ Fehler beim Import: " + (err.message || err);
-      confirmBtn.disabled = false;
-    }
-  });
-}
-
-// ---------------------------------------------------------------------
-// Artikel-Detail / Bearbeiten
-// ---------------------------------------------------------------------
-async function renderItem(id) {
-  const main = document.getElementById("main");
-  main.innerHTML = "";
-  main.appendChild(document.getElementById("tpl-item").content.cloneNode(true));
-
-  const { data: item, error } = await supabase.from("items").select("*").eq("id", id).single();
-  if (error || !item) {
-    main.innerHTML = `<div class="notice">Artikel nicht gefunden.</div><a href="#/">← Zur Übersicht</a>`;
-    return;
-  }
-
-  await renderItemPhotos(item);
-
-  document.getElementById("e-type").value = item.type;
-  document.getElementById("e-title").value = item.title || "";
-  document.getElementById("e-console").value = item.console || "";
-  document.getElementById("e-category").value = item.category || "";
-  document.getElementById("e-condition").value = item.condition_text || "";
-  document.getElementById("e-details").value = item.details || "";
-
-  enhanceCombo(document.getElementById("e-console"), CONSOLE_OPTIONS);
-  enhanceCombo(document.getElementById("e-category"), CATEGORY_OPTIONS);
-  enhanceCombo(document.getElementById("e-condition"), CONDITION_OPTIONS);
-  document.getElementById("e-purchase").value = item.purchase_price ?? "";
-  document.getElementById("e-estimated").value = item.estimated_value ?? "";
-  document.getElementById("e-sale-status").value = item.sale_status || "";
-  document.getElementById("e-notes").value = item.notes || "";
-
-  if (item.ai_price_note) {
-    const box = document.getElementById("ai-note");
-    box.textContent = "🤖 KI-Einschätzung: " + item.ai_price_note;
-    box.classList.remove("hidden");
-  }
-
-  document.getElementById("add-photo-input").addEventListener("change", async (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length === 0) return;
-    try {
-      const newPaths = await uploadPhotos(files);
-      const photos = [...(item.photos || []), ...newPaths];
-      const { error } = await supabase.from("items").update({ photos }).eq("id", id);
-      if (error) throw error;
-      item.photos = photos;
-      await renderItemPhotos(item);
-      flash("Foto hinzugefügt.");
-    } catch (err) {
-      flash("⚠️ Fehler beim Hochladen: " + (err.message || err));
-    }
-  });
-
-  document.getElementById("edit-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const payload = {
-      type: document.getElementById("e-type").value,
-      title: document.getElementById("e-title").value.trim(),
-      console: document.getElementById("e-console").value.trim(),
-      category: document.getElementById("e-category").value.trim(),
-      condition_text: document.getElementById("e-condition").value.trim(),
-      details: document.getElementById("e-details").value.trim(),
-      purchase_price: parseFloatOrNull(document.getElementById("e-purchase").value),
-      estimated_value: parseFloatOrNull(document.getElementById("e-estimated").value),
-      sale_status: document.getElementById("e-sale-status").value || null,
-      notes: document.getElementById("e-notes").value.trim(),
-    };
-    const { error } = await supabase.from("items").update(payload).eq("id", id);
-    if (error) {
-      flash("⚠️ Fehler beim Speichern: " + error.message);
-    } else {
-      flash("Änderungen gespeichert.");
-    }
-  });
-
-  document.getElementById("estimate-btn").addEventListener("click", async () => {
-    const status = document.getElementById("estimate-status");
-    status.textContent = "Schätze Preis…";
-    try {
-      const data = await invokeAnalyzeFn({
-        action: "price",
-        item: {
-          title: document.getElementById("e-title").value,
-          console: document.getElementById("e-console").value,
-          type: document.getElementById("e-type").value,
-          condition: document.getElementById("e-condition").value,
-          details: document.getElementById("e-details").value,
-        },
-      });
-      document.getElementById("e-estimated").value = data.mid ?? "";
-      status.textContent = `Geschätzt: ${data.estimated_low}–${data.estimated_high} € — ${data.note || ""}`;
-      await supabase.from("items").update({ estimated_value: data.mid, ai_price_note: data.note || "" }).eq("id", id);
-    } catch (err) {
-      status.textContent = "⚠️ Fehler bei der Preisschätzung: " + (err.message || err);
-    }
-  });
-
-  document.getElementById("delete-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    if (!confirm("Diesen Artikel wirklich löschen?")) return;
-    const storageOnlyPhotos = (item.photos || []).filter((p) => !isExternalPhotoUrl(p));
-    if (storageOnlyPhotos.length) {
-      await supabase.storage.from(PHOTO_BUCKET).remove(storageOnlyPhotos);
-    }
-    const { error } = await supabase.from("items").delete().eq("id", id);
-    if (error) {
-      flash("⚠️ Fehler beim Löschen: " + error.message);
-    } else {
-      flash("Artikel gelöscht.");
-      location.hash = "#/";
-    }
-  });
-}
-
-async function renderItemPhotos(item) {
-  const box = document.getElementById("item-photos");
-  const photos = item.photos || [];
-  if (photos.length === 0) {
-    box.innerHTML = `<div class="no-photo big">🎮</div>`;
-    return;
-  }
-  const urlMap = await getSignedUrlMap(photos);
-  box.innerHTML = photos
-    .map(
-      (p, idx) => `
-      <div class="photo-wrap">
-        <img src="${urlMap[p] || ""}" alt="Foto">
-        <button type="button" class="photo-delete" data-idx="${idx}">✕</button>
-      </div>`
-    )
-    .join("");
-  box.querySelectorAll(".photo-delete").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      if (!confirm("Foto entfernen?")) return;
-      const idx = Number(btn.dataset.idx);
-      const path = photos[idx];
-      if (!isExternalPhotoUrl(path)) {
-        await supabase.storage.from(PHOTO_BUCKET).remove([path]);
-      }
-      const newPhotos = photos.filter((_, i) => i !== idx);
-      await supabase.from("items").update({ photos: newPhotos }).eq("id", item.id);
-      item.photos = newPhotos;
-      await renderItemPhotos(item);
-    });
-  });
-}
-
-// ---------------------------------------------------------------------
-// CSV-Export
-// ---------------------------------------------------------------------
-async function exportCsv() {
-  const { data: items, error } = await supabase.from("items").select("*").order("created_at", { ascending: false });
-  if (error) {
-    flash("⚠️ Export fehlgeschlagen: " + error.message);
-    return;
-  }
-  const header = ["Typ", "Titel", "Konsole", "Kategorie", "Zustand", "Details", "Kaufpreis", "Geschaetzter Wert", "Verkaufsstatus", "Notizen", "Erstellt"];
-  const rows = items.map((r) => [
-    TYPE_LABELS[r.type] || r.type,
-    r.title,
-    r.console,
-    r.category,
-    r.condition_text,
-    r.details,
-    r.purchase_price ?? "",
-    r.estimated_value ?? "",
-    (SALE_STATUS[r.sale_status] && SALE_STATUS[r.sale_status].label) || "",
-    r.notes,
-    r.created_at,
-  ]);
-  const csv = [header, ...rows].map((row) => row.map(csvEscape).join(";")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "sammlung_export.csv";
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function csvEscape(v) {
-  const s = v == null ? "" : String(v);
-  if (s.includes(";") || s.includes('"') || s.includes("\n")) {
-    return '"' + s.replace(/"/g, '""') + '"';
-  }
-  return s;
-}
-
-function escapeHtml(s) {
-  if (s == null) return "";
-  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
-
-init();
+          <div
