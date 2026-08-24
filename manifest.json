@@ -1,0 +1,9 @@
+{
+  "name": "Sammlung-Tracker",
+  "short_name": "Sammlung",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f6f5f2",
+  "theme_color": "#b5652c",
+  "icons": []
+}

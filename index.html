@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sammlung-Tracker</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#b5652c">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22><text y=%2213%22 font-size=%2214%22>🎮</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Login -->
+<section id="view-login" class="view">
+  <div class="login-box">
+    <h1>🎮 Sammlung-Tracker</h1>
+    <p class="muted">Bitte anmelden.</p>
+    <form id="login-form">
+      <label>E-Mail<input type="email" id="login-email" required autocomplete="username"></label>
+      <label>Passwort<input type="password" id="login-password" required autocomplete="current-password"></label>
+      <button type="submit" class="btn-primary">Anmelden</button>
+      <div id="login-error" class="status-text error"></div>
+    </form>
+  </div>
+</section>
+
+<!-- App shell -->
+<div id="app-shell" class="hidden">
+  <header class="topbar">
+    <a class="brand" href="#/">🎮 Sammlung-Tracker</a>
+    <nav>
+      <a href="#/">Übersicht</a>
+      <a href="#/add" class="btn-primary-nav">+ Artikel</a>
+      <button id="export-btn" class="link-btn">Export</button>
+      <button id="logout-btn" class="link-btn">Abmelden</button>
+    </nav>
+  </header>
+  <div id="flash" class="flash hidden"></div>
+  <main id="main"></main>
+</div>
+
+<!-- Templates -->
+<template id="tpl-index">
+  <section class="stats" id="stats"></section>
+  <form class="filters" id="filter-form">
+    <input type="text" name="q" placeholder="Suche: Titel, Konsole, Details…">
+    <select name="type">
+      <option value="">Alle Typen</option>
+      <option value="konsole">Konsole</option>
+      <option value="spiel">Spiel</option>
+      <option value="zubehoer">Zubehoer</option>
+    </select>
+    <select name="console" id="console-filter"><option value="">Alle Konsolen</option></select>
+    <select name="sort">
+      <option value="created_desc">Neueste zuerst</option>
+      <option value="created_asc">Älteste zuerst</option>
+      <option value="title_asc">Titel A–Z</option>
+      <option value="value_desc">Wert absteigend</option>
+      <option value="value_asc">Wert aufsteigend</option>
+    </select>
+  </form>
+  <div id="grid" class="grid"></div>
+  <div id="empty-state" class="empty-state hidden">
+    <p>Noch keine Artikel erfasst.</p>
+    <a class="btn-primary" href="#/add">Ersten Artikel hinzufügen</a>
+  </div>
+</template>
+
+<template id="tpl-add">
+  <h1>Neuen Artikel hinzufügen</h1>
+  <div id="no-key-notice" class="notice hidden">
+    KI-Bilderkennung ist (noch) nicht eingerichtet – du kannst trotzdem ein Foto anhängen
+    und alle Felder manuell ausfüllen.
+  </div>
+  <form id="item-form" class="item-form">
+    <div class="photo-section">
+      <label class="photo-drop" id="photo-drop">
+        <input type="file" id="photo-input" accept="image/*" capture="environment" multiple>
+        <span id="photo-drop-text">📷 Foto aufnehmen oder Datei(en) auswählen</span>
+        <div id="photo-previews" class="photo-previews"></div>
+      </label>
+      <button type="button" id="analyze-btn" class="btn-secondary" disabled>🤖 Mit KI erkennen</button>
+      <div id="analyze-status" class="status-text"></div>
+    </div>
+    <div class="field-grid">
+      <label>Typ
+        <select name="type" id="f-type">
+          <option value="spiel">Spiel</option>
+          <option value="konsole">Konsole</option>
+          <option value="zubehoer">Zubehoer</option>
+        </select>
+      </label>
+      <label>Titel / Bezeichnung<input type="text" name="title" id="f-title" placeholder="z. B. Super Mario Sunshine"></label>
+      <label>Konsole / Plattform
+        <input type="text" name="console" id="f-console" placeholder="z. B. Nintendo GameCube" list="console-list">
+        <datalist id="console-list">
+          <option value="Nintendo Switch"><option value="Nintendo Switch 2"><option value="Nintendo GameCube">
+          <option value="Nintendo Wii"><option value="Nintendo Wii U"><option value="Nintendo 64">
+          <option value="Game Boy"><option value="Game Boy Advance"><option value="Nintendo DS"><option value="Nintendo 3DS">
+          <option value="PlayStation"><option value="PlayStation 2"><option value="PlayStation 3">
+          <option value="PlayStation 4"><option value="PlayStation 5"><option value="PSP"><option value="PS Vita">
+          <option value="Xbox"><option value="Xbox 360"><option value="Xbox One"><option value="Xbox Series X/S">
+          <option value="Sega Mega Drive"><option value="Sega Dreamcast">
+        </datalist>
+      </label>
+      <label>Kategorie / Genre<input type="text" name="category" id="f-category" placeholder="z. B. Jump'n'Run, Handheld, Controller"></label>
+      <label>Zustand<input type="text" name="condition" id="f-condition" placeholder="z. B. OVP, wie neu"></label>
+      <label class="full">Details<textarea name="details" id="f-details" rows="2" placeholder="Region, Edition, Bundle-Inhalt, Besonderheiten…"></textarea></label>
+      <label>Kaufpreis (€)<input type="number" step="0.01" min="0" name="purchase_price" id="f-purchase"></label>
+      <label>Geschätzter Verkaufswert (€)<input type="number" step="0.01" min="0" name="estimated_value" id="f-estimated"></label>
+      <label class="full">Notizen<textarea name="notes" id="f-notes" rows="2"></textarea></label>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn-primary">Speichern</button>
+      <a href="#/" class="btn-secondary">Abbrechen</a>
+    </div>
+    <div id="save-status" class="status-text"></div>
+  </form>
+</template>
+
+<template id="tpl-item">
+  <a class="back-link" href="#/">← Zur Übersicht</a>
+  <div class="item-detail">
+    <div class="item-photos" id="item-photos"></div>
+    <label class="btn-secondary small add-photo-label">
+      + Foto hinzufügen
+      <input type="file" id="add-photo-input" accept="image/*" capture="environment" multiple style="display:none">
+    </label>
+    <form class="item-form" id="edit-form">
+      <div class="field-grid">
+        <label>Typ
+          <select name="type" id="e-type">
+            <option value="spiel">Spiel</option>
+            <option value="konsole">Konsole</option>
+            <option value="zubehoer">Zubehoer</option>
+          </select>
+        </label>
+        <label>Titel / Bezeichnung<input type="text" name="title" id="e-title"></label>
+        <label>Konsole / Plattform<input type="text" name="console" id="e-console"></label>
+        <label>Kategorie / Genre<input type="text" name="category" id="e-category"></label>
+        <label>Zustand<input type="text" name="condition" id="e-condition"></label>
+        <label class="full">Details<textarea name="details" id="e-details" rows="2"></textarea></label>
+        <label>Kaufpreis (€)<input type="number" step="0.01" min="0" name="purchase_price" id="e-purchase"></label>
+        <label>Geschätzter Verkaufswert (€)<input type="number" step="0.01" min="0" name="estimated_value" id="e-estimated"></label>
+        <label class="full">Notizen<textarea name="notes" id="e-notes" rows="2"></textarea></label>
+      </div>
+      <div id="ai-note" class="ai-note hidden"></div>
+      <div class="form-actions">
+        <button type="submit" class="btn-primary">Änderungen speichern</button>
+        <button type="button" id="estimate-btn" class="btn-secondary">🤖 Preis mit KI schätzen</button>
+      </div>
+      <div id="estimate-status" class="status-text"></div>
+    </form>
+    <form id="delete-form">
+      <button type="submit" class="btn-danger">Artikel löschen</button>
+    </form>
+  </div>
+</template>
+
+<script src="config.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
