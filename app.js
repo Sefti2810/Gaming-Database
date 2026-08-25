@@ -28,7 +28,7 @@ const CONSOLE_OPTIONS = [
   "Game Boy", "Game Boy Color", "Game Boy Advance", "Nintendo DS", "Nintendo DS Lite",
   "Nintendo DSi", "Nintendo 3DS", "New Nintendo 3DS",
   "PlayStation", "PlayStation 2", "PlayStation 3", "PlayStation 4", "PlayStation 5",
-  "PSP", "PS Vita",
+  "PlayStation Portable", "PS Vita",
   "Xbox", "Xbox 360", "Xbox One", "Xbox Series X/S",
   "Sega Mega Drive", "Sega Saturn", "Sega Dreamcast", "PC",
 ];
@@ -318,6 +318,30 @@ function fileToDataUrl(file) {
 // ---------------------------------------------------------------------
 // Übersicht
 // ---------------------------------------------------------------------
+// Merkt sich die zuletzt gewaehlten Filter (Suche, Typ, Konsole, Status, Sortierung),
+// damit sie beim Zurueckkehren von einem Artikel (z.B. nach dem Bearbeiten) erhalten
+// bleiben, statt bei jedem Aufruf der Uebersicht zurueckgesetzt zu werden.
+let savedFilterState = null;
+
+function restoreFilterState() {
+  if (!savedFilterState) return;
+  const form = document.getElementById("filter-form");
+  if (!form) return;
+  const qInput = form.querySelector('[name="q"]');
+  if (qInput) qInput.value = savedFilterState.q || "";
+  const typeSelect = form.querySelector('[name="type"]');
+  if (typeSelect) typeSelect.value = savedFilterState.type || "";
+  const consoleSelect = form.querySelector('[name="console"]');
+  if (consoleSelect && savedFilterState.console) consoleSelect.value = savedFilterState.console;
+  const sortSelect = form.querySelector('[name="sort"]');
+  if (sortSelect) sortSelect.value = savedFilterState.sort || "created_desc";
+  if (savedFilterState.saleStatuses) {
+    form.querySelectorAll('input[name="sale_status"]').forEach((b) => {
+      b.checked = savedFilterState.saleStatuses.includes(b.value);
+    });
+  }
+}
+
 async function renderIndex() {
   const main = document.getElementById("main");
   main.innerHTML = "";
@@ -335,6 +359,7 @@ async function renderIndex() {
 
   renderStats(items);
   populateConsoleFilter(items);
+  restoreFilterState();
   setupSaleStatusFilter();
   updateViewButtons();
   applyFiltersAndRender(items);
@@ -436,6 +461,14 @@ async function applyFiltersAndRender(items) {
   const saleStatuses = fd.getAll("sale_status").map(String);
   const allSaleStatusCount = form.querySelectorAll('input[name="sale_status"]').length;
   const sort = fd.get("sort");
+
+  savedFilterState = {
+    q: (fd.get("q") || "").toString(),
+    type: (type || "").toString(),
+    console: (cons || "").toString(),
+    sort: (sort || "created_desc").toString(),
+    saleStatuses,
+  };
 
   let filtered = items.filter((i) => {
     if (type && i.type !== type) return false;
