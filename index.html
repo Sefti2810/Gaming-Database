@@ -57,29 +57,28 @@
 <!-- Templates -->
 <template id="tpl-index">
   <section class="stats" id="stats"></section>
+  <details class="console-breakdown" id="console-breakdown">
+    <summary>📊 Aufschlüsselung nach Konsole</summary>
+    <div id="console-breakdown-body"></div>
+  </details>
   <form class="filters" id="filter-form">
     <input type="text" name="q" placeholder="Suche: Titel, Konsole, Details…">
-    <select name="type">
-      <option value="">Alle Typen</option>
-      <option value="konsole">Konsole</option>
-      <option value="spiel">Spiel</option>
-      <option value="zubehoer">Zubehoer</option>
-    </select>
-    <select name="console" id="console-filter"><option value="">Alle Konsolen</option></select>
+    <details class="ms-filter" id="type-filter">
+      <summary>Typ <span class="ms-count"></span></summary>
+      <div class="ms-options"></div>
+    </details>
+    <details class="ms-filter" id="console-filter">
+      <summary>Konsole <span class="ms-count"></span></summary>
+      <div class="ms-options"></div>
+    </details>
     <details class="ms-filter" id="sale-status-filter">
       <summary>Status <span class="ms-count"></span></summary>
-      <div class="ms-options">
-        <label><input type="checkbox" name="sale_status" value="" checked> Ohne Vermerk</label>
-        <label><input type="checkbox" name="sale_status" value="for_sale" checked> Zum Verkauf vorgesehen</label>
-        <label><input type="checkbox" name="sale_status" value="reserved" checked> Reserviert</label>
-        <label><input type="checkbox" name="sale_status" value="sold" checked> Verkauft</label>
-        <label><input type="checkbox" name="sale_status" value="not_for_sale" checked> Nicht zu verkaufen</label>
-        <div class="ms-actions">
-          <button type="button" class="ms-all">Alle</button>
-          <button type="button" class="ms-none">Keine</button>
-        </div>
-      </div>
+      <div class="ms-options"></div>
     </details>
+    <label class="coop-filter-toggle">
+      <input type="checkbox" name="coop_only" id="coop-only-filter">
+      🎮 Nur Koop/Kampagne
+    </label>
     <select name="sort">
       <option value="created_desc">Neueste zuerst</option>
       <option value="created_asc">Älteste zuerst</option>
@@ -144,6 +143,8 @@
           <option value="not_for_sale">Nicht zu verkaufen</option>
         </select>
       </label>
+      <label>Lagerort<input type="text" name="storage_location" id="f-storage-location" placeholder="z. B. Regal 2, Kiste B"></label>
+      <label class="checkbox-inline"><input type="checkbox" name="coop_campaign" id="f-coop"> 🎮 Koop-/Splitscreen-Kampagne</label>
       <label class="full">Notizen<textarea name="notes" id="f-notes" rows="2"></textarea></label>
     </div>
     <div class="form-actions">
@@ -235,6 +236,8 @@
             <option value="not_for_sale">Nicht zu verkaufen</option>
           </select>
         </label>
+        <label>Lagerort<input type="text" name="storage_location" id="e-storage-location" placeholder="z. B. Regal 2, Kiste B"></label>
+        <label class="checkbox-inline"><input type="checkbox" name="coop_campaign" id="e-coop"> 🎮 Koop-/Splitscreen-Kampagne</label>
         <label class="full">Notizen<textarea name="notes" id="e-notes" rows="2"></textarea></label>
       </div>
       <div id="ai-note" class="ai-note hidden"></div>

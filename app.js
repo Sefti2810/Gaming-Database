@@ -318,9 +318,10 @@ function fileToDataUrl(file) {
 // ---------------------------------------------------------------------
 // Übersicht
 // ---------------------------------------------------------------------
-// Merkt sich die zuletzt gewaehlten Filter (Suche, Typ, Konsole, Status, Sortierung),
-// damit sie beim Zurueckkehren von einem Artikel (z.B. nach dem Bearbeiten) erhalten
-// bleiben, statt bei jedem Aufruf der Uebersicht zurueckgesetzt zu werden.
+// Merkt sich die zuletzt gewaehlten Filter (Suche, Typ, Konsole, Status, Koop,
+// Sortierung), damit sie beim Zurueckkehren von einem Artikel (z.B. nach dem
+// Bearbeiten) erhalten bleiben, statt bei jedem Aufruf der Uebersicht
+// zurueckgesetzt zu werden.
 let savedFilterState = null;
 
 function restoreFilterState() {
@@ -329,17 +330,109 @@ function restoreFilterState() {
   if (!form) return;
   const qInput = form.querySelector('[name="q"]');
   if (qInput) qInput.value = savedFilterState.q || "";
-  const typeSelect = form.querySelector('[name="type"]');
-  if (typeSelect) typeSelect.value = savedFilterState.type || "";
-  const consoleSelect = form.querySelector('[name="console"]');
-  if (consoleSelect && savedFilterState.console) consoleSelect.value = savedFilterState.console;
   const sortSelect = form.querySelector('[name="sort"]');
   if (sortSelect) sortSelect.value = savedFilterState.sort || "created_desc";
+  const coopBox = form.querySelector('[name="coop_only"]');
+  if (coopBox) coopBox.checked = !!savedFilterState.coopOnly;
+  if (savedFilterState.types) {
+    form.querySelectorAll('input[name="type"]').forEach((b) => {
+      b.checked = savedFilterState.types.includes(b.value);
+    });
+  }
+  if (savedFilterState.consoles) {
+    form.querySelectorAll('input[name="console"]').forEach((b) => {
+      b.checked = savedFilterState.consoles.includes(b.value);
+    });
+  }
   if (savedFilterState.saleStatuses) {
     form.querySelectorAll('input[name="sale_status"]').forEach((b) => {
       b.checked = savedFilterState.saleStatuses.includes(b.value);
     });
   }
+  updateAllMsCounts();
+}
+
+// ---------------------------------------------------------------------
+// Mehrfachauswahl-Filter (Typ, Konsole, Verkaufsstatus): generischer Aufbau
+// der Checkbox-Liste innerhalb eines <details class="ms-filter">, damit man
+// z.B. mehrere Konsolen gleichzeitig ein-/ausblenden kann.
+// ---------------------------------------------------------------------
+let msOutsideClickBound = false;
+function ensureMsOutsideClickHandler() {
+  if (msOutsideClickBound) return;
+  msOutsideClickBound = true;
+  document.addEventListener("click", (e) => {
+    document.querySelectorAll(".ms-filter[open]").forEach((details) => {
+      if (!details.contains(e.target)) details.open = false;
+    });
+  });
+}
+
+function updateMsCount(details) {
+  if (!details) return;
+  const boxes = Array.from(details.querySelectorAll('input[type="checkbox"]'));
+  const checked = boxes.filter((b) => b.checked).length;
+  const countEl = details.querySelector(".ms-count");
+  if (countEl) countEl.textContent = checked === boxes.length ? "" : `(${checked}/${boxes.length})`;
+}
+
+function updateAllMsCounts() {
+  ["type-filter", "console-filter", "sale-status-filter"].forEach((id) => {
+    updateMsCount(document.getElementById(id));
+  });
+}
+
+function buildMultiSelectFilter(detailsId, inputName, options) {
+  const details = document.getElementById(detailsId);
+  if (!details) return;
+  const optionsBox = details.querySelector(".ms-options");
+  optionsBox.innerHTML =
+    `<div class="ms-actions">
+      <button type="button" class="ms-all">Alle</button>
+      <button type="button" class="ms-none">Keine</button>
+    </div>` +
+    options
+      .map(
+        (o) =>
+          `<label><input type="checkbox" name="${inputName}" value="${escapeHtml(o.value)}" checked> ${escapeHtml(o.label)}</label>`
+      )
+      .join("");
+
+  updateMsCount(details);
+
+  optionsBox.querySelector(".ms-all").addEventListener("click", () => {
+    details.querySelectorAll(`input[name="${inputName}"]`).forEach((b) => (b.checked = true));
+    updateMsCount(details);
+    document.getElementById("filter-form").dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  optionsBox.querySelector(".ms-none").addEventListener("click", () => {
+    details.querySelectorAll(`input[name="${inputName}"]`).forEach((b) => (b.checked = false));
+    updateMsCount(details);
+    document.getElementById("filter-form").dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+  ensureMsOutsideClickHandler();
+}
+
+function populateFilters(items) {
+  buildMultiSelectFilter("type-filter", "type", [
+    { value: "konsole", label: "Konsole" },
+    { value: "spiel", label: "Spiel" },
+    { value: "zubehoer", label: "Zubehoer" },
+  ]);
+  const consoles = [...new Set(items.map((i) => i.console).filter(Boolean))].sort();
+  buildMultiSelectFilter(
+    "console-filter",
+    "console",
+    consoles.map((c) => ({ value: c, label: c }))
+  );
+  buildMultiSelectFilter("sale-status-filter", "sale_status", [
+    { value: "", label: "– kein Vermerk –" },
+    { value: "for_sale", label: "Zum Verkauf vorgesehen" },
+    { value: "reserved", label: "Reserviert" },
+    { value: "sold", label: "Verkauft" },
+    { value: "not_for_sale", label: "Nicht zu verkaufen" },
+  ]);
 }
 
 async function renderIndex() {
@@ -358,14 +451,13 @@ async function renderIndex() {
   }
 
   renderStats(items);
-  populateConsoleFilter(items);
+  populateFilters(items);
   restoreFilterState();
-  setupSaleStatusFilter();
   updateViewButtons();
   applyFiltersAndRender(items);
 
   document.getElementById("filter-form").addEventListener("input", () => {
-    updateSaleStatusSummary();
+    updateAllMsCounts();
     applyFiltersAndRender(items);
   });
   document.getElementById("view-grid-btn").addEventListener("click", () => setView("grid", items));
@@ -400,80 +492,85 @@ function renderStats(items) {
   const totalInvested = items.reduce((s, i) => s + (Number(i.purchase_price) || 0), 0);
   const totalEstimated = items.reduce((s, i) => s + (Number(i.estimated_value) || 0), 0);
   const diff = totalEstimated - totalInvested;
+  const totalSold = items
+    .filter((i) => i.sale_status === "sold")
+    .reduce((s, i) => s + (Number(i.estimated_value) || 0), 0);
   document.getElementById("stats").innerHTML = `
     <div class="stat-card"><div class="stat-label">Artikel gesamt</div><div class="stat-value">${totalItems}</div></div>
     <div class="stat-card"><div class="stat-label">Investiert (Kaufpreise)</div><div class="stat-value">${totalInvested.toFixed(2)} €</div></div>
     <div class="stat-card"><div class="stat-label">Geschätzter Wert</div><div class="stat-value">${totalEstimated.toFixed(2)} €</div></div>
     <div class="stat-card ${diff >= 0 ? "pos" : "neg"}"><div class="stat-label">Differenz</div><div class="stat-value">${diff >= 0 ? "+" : ""}${diff.toFixed(2)} €</div></div>
+    <div class="stat-card"><div class="stat-label">Bereits verkauft (Wert)</div><div class="stat-value">${totalSold.toFixed(2)} €</div></div>
   `;
+  renderConsoleBreakdown(items);
 }
 
-function populateConsoleFilter(items) {
-  const consoles = [...new Set(items.map((i) => i.console).filter(Boolean))].sort();
-  const select = document.getElementById("console-filter");
-  consoles.forEach((c) => {
-    const opt = document.createElement("option");
-    opt.value = c;
-    opt.textContent = c;
-    select.appendChild(opt);
+function renderConsoleBreakdown(items) {
+  const body = document.getElementById("console-breakdown-body");
+  if (!body) return;
+  const byConsole = {};
+  items.forEach((i) => {
+    const key = i.console || "(ohne Konsole)";
+    if (!byConsole[key]) byConsole[key] = { count: 0, invested: 0, estimated: 0, sold: 0 };
+    byConsole[key].count += 1;
+    byConsole[key].invested += Number(i.purchase_price) || 0;
+    byConsole[key].estimated += Number(i.estimated_value) || 0;
+    if (i.sale_status === "sold") byConsole[key].sold += Number(i.estimated_value) || 0;
   });
-}
-
-function updateSaleStatusSummary() {
-  const details = document.getElementById("sale-status-filter");
-  if (!details) return;
-  const boxes = Array.from(details.querySelectorAll('input[name="sale_status"]'));
-  const checked = boxes.filter((b) => b.checked).length;
-  const countEl = details.querySelector(".ms-count");
-  if (countEl) countEl.textContent = checked === boxes.length ? "" : `(${checked}/${boxes.length})`;
-}
-
-function setupSaleStatusFilter() {
-  const details = document.getElementById("sale-status-filter");
-  if (!details) return;
-  updateSaleStatusSummary();
-
-  details.querySelector(".ms-all")?.addEventListener("click", () => {
-    details.querySelectorAll('input[name="sale_status"]').forEach((b) => (b.checked = true));
-    updateSaleStatusSummary();
-    details.dispatchEvent(new Event("change-request"));
-    document.getElementById("filter-form").dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  details.querySelector(".ms-none")?.addEventListener("click", () => {
-    details.querySelectorAll('input[name="sale_status"]').forEach((b) => (b.checked = false));
-    updateSaleStatusSummary();
-    document.getElementById("filter-form").dispatchEvent(new Event("input", { bubbles: true }));
-  });
-
-  // Ausserhalb geklickt -> Dropdown schliessen.
-  document.addEventListener("click", (e) => {
-    if (!details.open) return;
-    if (!details.contains(e.target)) details.open = false;
-  });
+  const rows = Object.entries(byConsole).sort((a, b) => b[1].count - a[1].count);
+  if (rows.length === 0) {
+    body.innerHTML = `<p class="muted">Noch keine Artikel erfasst.</p>`;
+    return;
+  }
+  body.innerHTML = `
+    <table class="console-breakdown-table">
+      <thead>
+        <tr><th>Konsole</th><th class="num">Artikel</th><th class="num">Investiert</th><th class="num">Wert</th><th class="num">Verkauft</th></tr>
+      </thead>
+      <tbody>
+        ${rows
+          .map(
+            ([name, s]) => `<tr>
+              <td>${escapeHtml(name)}</td>
+              <td class="num">${s.count}</td>
+              <td class="num">${s.invested.toFixed(2)} €</td>
+              <td class="num">${s.estimated.toFixed(2)} €</td>
+              <td class="num">${s.sold.toFixed(2)} €</td>
+            </tr>`
+          )
+          .join("")}
+      </tbody>
+    </table>
+  `;
 }
 
 async function applyFiltersAndRender(items) {
   const form = document.getElementById("filter-form");
   const fd = new FormData(form);
   const q = (fd.get("q") || "").toString().toLowerCase();
-  const type = fd.get("type");
-  const cons = fd.get("console");
+  const types = fd.getAll("type").map(String);
+  const consoles = fd.getAll("console").map(String);
   const saleStatuses = fd.getAll("sale_status").map(String);
+  const coopOnly = fd.get("coop_only") === "on";
+  const allTypeCount = form.querySelectorAll('input[name="type"]').length;
+  const allConsoleCount = form.querySelectorAll('input[name="console"]').length;
   const allSaleStatusCount = form.querySelectorAll('input[name="sale_status"]').length;
   const sort = fd.get("sort");
 
   savedFilterState = {
     q: (fd.get("q") || "").toString(),
-    type: (type || "").toString(),
-    console: (cons || "").toString(),
+    types,
+    consoles,
     sort: (sort || "created_desc").toString(),
     saleStatuses,
+    coopOnly,
   };
 
   let filtered = items.filter((i) => {
-    if (type && i.type !== type) return false;
-    if (cons && i.console !== cons) return false;
+    if (types.length < allTypeCount && !types.includes(i.type || "")) return false;
+    if (consoles.length < allConsoleCount && !consoles.includes(i.console || "")) return false;
     if (saleStatuses.length < allSaleStatusCount && !saleStatuses.includes(i.sale_status || "")) return false;
+    if (coopOnly && !i.coop_campaign) return false;
     if (q) {
       const hay = `${i.title} ${i.console} ${i.details} ${i.notes}`.toLowerCase();
       if (!hay.includes(q)) return false;
@@ -508,7 +605,7 @@ async function applyFiltersAndRender(items) {
         (item) => `
       <a class="list-row" href="#/item/${item.id}">
         <span class="badge-inline badge-${item.type}">${TYPE_LABELS[item.type] || item.type}</span>
-        <span class="list-title">${escapeHtml(item.title) || "(ohne Titel)"}</span>
+        <span class="list-title">${escapeHtml(item.title) || "(ohne Titel)"}${item.coop_campaign ? ' <span class="coop-badge">🎮 Koop</span>' : ""}</span>
         <span class="list-console">${escapeHtml(item.console)}</span>
         <span class="list-status">${saleBadgeHtml(item.sale_status) || "–"}</span>
         <span class="list-price">${item.purchase_price != null ? Number(item.purchase_price).toFixed(2) + " €" : "–"}</span>
@@ -538,7 +635,11 @@ async function applyFiltersAndRender(items) {
           <div class="card-title">${escapeHtml(item.title) || "(ohne Titel)"}</div>
           <div class="card-console">${escapeHtml(item.console)}</div>
           ${item.category ? `<div class="card-category">${escapeHtml(item.category)}</div>` : ""}
-          ${item.sale_status ? `<div class="card-sale">${saleBadgeHtml(item.sale_status)}</div>` : ""}
+          ${
+            item.sale_status || item.coop_campaign
+              ? `<div class="card-sale">${saleBadgeHtml(item.sale_status)}${item.coop_campaign ? ' <span class="coop-badge">🎮 Koop</span>' : ""}</div>`
+              : ""
+          }
           <div class="card-prices">
             <span>Kauf: ${item.purchase_price != null ? Number(item.purchase_price).toFixed(2) + " €" : "–"}</span>
             <span>Wert: ${item.estimated_value != null ? Number(item.estimated_value).toFixed(2) + " €" : "–"}</span>
@@ -604,20 +705,44 @@ function renderAdd() {
   document.getElementById("item-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const status = document.getElementById("save-status");
+    const title = document.getElementById("f-title").value.trim();
+    const consoleVal = document.getElementById("f-console").value.trim();
+
+    if (title) {
+      try {
+        const { data: dupes } = await supabase
+          .from("items")
+          .select("id, console")
+          .ilike("title", title)
+          .limit(10);
+        const realDupes = (dupes || []).filter((d) => (d.console || "").toLowerCase() === consoleVal.toLowerCase());
+        if (realDupes.length > 0) {
+          const ok = confirm(
+            `Es gibt bereits ${realDupes.length} Artikel mit dem Titel "${title}" (Konsole "${consoleVal || "–"}"). Trotzdem speichern?`
+          );
+          if (!ok) return;
+        }
+      } catch (_) {
+        // Duplikat-Check fehlgeschlagen (z.B. Netzwerk) - Speichern trotzdem erlauben.
+      }
+    }
+
     status.textContent = "Speichere…";
     try {
       const photos = selectedFiles.length ? await uploadPhotos(selectedFiles) : [];
       const payload = {
         user_id: currentUser.id,
         type: document.getElementById("f-type").value,
-        title: document.getElementById("f-title").value.trim(),
-        console: document.getElementById("f-console").value.trim(),
+        title,
+        console: consoleVal,
         category: document.getElementById("f-category").value.trim(),
         condition_text: document.getElementById("f-condition").value.trim(),
         details: document.getElementById("f-details").value.trim(),
         purchase_price: parseFloatOrNull(document.getElementById("f-purchase").value),
         estimated_value: parseFloatOrNull(document.getElementById("f-estimated").value),
         sale_status: document.getElementById("f-sale-status").value || null,
+        storage_location: document.getElementById("f-storage-location").value.trim(),
+        coop_campaign: document.getElementById("f-coop").checked,
         notes: document.getElementById("f-notes").value.trim(),
         photos,
       };
@@ -800,6 +925,8 @@ async function renderItem(id) {
   document.getElementById("e-purchase").value = item.purchase_price ?? "";
   document.getElementById("e-estimated").value = item.estimated_value ?? "";
   document.getElementById("e-sale-status").value = item.sale_status || "";
+  document.getElementById("e-storage-location").value = item.storage_location || "";
+  document.getElementById("e-coop").checked = !!item.coop_campaign;
   document.getElementById("e-notes").value = item.notes || "";
 
   if (item.ai_price_note) {
@@ -836,6 +963,8 @@ async function renderItem(id) {
       purchase_price: parseFloatOrNull(document.getElementById("e-purchase").value),
       estimated_value: parseFloatOrNull(document.getElementById("e-estimated").value),
       sale_status: document.getElementById("e-sale-status").value || null,
+      storage_location: document.getElementById("e-storage-location").value.trim(),
+      coop_campaign: document.getElementById("e-coop").checked,
       notes: document.getElementById("e-notes").value.trim(),
     };
     const { error } = await supabase.from("items").update(payload).eq("id", id);
@@ -927,7 +1056,7 @@ async function exportCsv() {
     flash("⚠️ Export fehlgeschlagen: " + error.message);
     return;
   }
-  const header = ["Typ", "Titel", "Konsole", "Kategorie", "Zustand", "Details", "Kaufpreis", "Geschaetzter Wert", "Verkaufsstatus", "Notizen", "Erstellt"];
+  const header = ["Typ", "Titel", "Konsole", "Kategorie", "Zustand", "Details", "Kaufpreis", "Geschaetzter Wert", "Verkaufsstatus", "Lagerort", "Koop/Kampagne", "Notizen", "Erstellt"];
   const rows = items.map((r) => [
     TYPE_LABELS[r.type] || r.type,
     r.title,
@@ -938,6 +1067,8 @@ async function exportCsv() {
     r.purchase_price ?? "",
     r.estimated_value ?? "",
     (SALE_STATUS[r.sale_status] && SALE_STATUS[r.sale_status].label) || "",
+    r.storage_location || "",
+    r.coop_campaign ? "Ja" : "",
     r.notes,
     r.created_at,
   ]);
