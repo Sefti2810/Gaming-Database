@@ -606,14 +606,18 @@ function renderStats(items) {
   const totalSold = soldItems.reduce((s, i) => s + realizedValue(i), 0);
   const soldInvested = soldItems.reduce((s, i) => s + (Number(i.purchase_price) || 0), 0);
   const soldProfit = totalSold - soldInvested;
-  document.getElementById("stats").innerHTML = `
-    <div class="stat-card"><div class="stat-label">Artikel gesamt</div><div class="stat-value">${totalItems}</div></div>
-    <div class="stat-card"><div class="stat-label">Investiert (Kaufpreise)</div><div class="stat-value">${totalInvested.toFixed(2)} €</div></div>
-    <div class="stat-card"><div class="stat-label">Geschätzter Wert</div><div class="stat-value">${totalEstimated.toFixed(2)} €</div></div>
-    <div class="stat-card ${diff >= 0 ? "pos" : "neg"}"><div class="stat-label">Differenz</div><div class="stat-value">${diff >= 0 ? "+" : ""}${diff.toFixed(2)} €</div></div>
-    <div class="stat-card"><div class="stat-label">Bereits verkauft (Erlös)</div><div class="stat-value">${totalSold.toFixed(2)} €</div></div>
-    <div class="stat-card ${soldProfit >= 0 ? "pos" : "neg"}"><div class="stat-label">Realisierter Gewinn/Verlust</div><div class="stat-value">${soldProfit >= 0 ? "+" : ""}${soldProfit.toFixed(2)} €</div></div>
-  `;
+  const statCard = (icon, label, value, cls) => `
+    <div class="stat-card ${cls || ""}">
+      <div class="stat-icon">${icon}</div>
+      <div class="stat-body"><div class="stat-label">${label}</div><div class="stat-value">${value}</div></div>
+    </div>`;
+  document.getElementById("stats").innerHTML =
+    statCard("📦", "Artikel gesamt", totalItems) +
+    statCard("💶", "Investiert (Kaufpreise)", totalInvested.toFixed(2) + " €") +
+    statCard("💰", "Geschätzter Wert", totalEstimated.toFixed(2) + " €") +
+    statCard("📊", "Differenz", (diff >= 0 ? "+" : "") + diff.toFixed(2) + " €", diff >= 0 ? "pos" : "neg") +
+    statCard("✅", "Bereits verkauft (Erlös)", totalSold.toFixed(2) + " €") +
+    statCard("📈", "Realisierter Gewinn/Verlust", (soldProfit >= 0 ? "+" : "") + soldProfit.toFixed(2) + " €", soldProfit >= 0 ? "pos" : "neg");
   renderConsoleBreakdown(items);
 }
 
@@ -754,6 +758,8 @@ async function applyFiltersAndRender(items) {
   const grid = document.getElementById("grid");
   const storageContainer = document.getElementById("storage-view");
   const empty = document.getElementById("empty-state");
+  fadeOutEl(grid);
+  fadeOutEl(storageContainer);
   if (filtered.length === 0) {
     grid.innerHTML = "";
     if (storageContainer) storageContainer.innerHTML = "";
@@ -766,6 +772,7 @@ async function applyFiltersAndRender(items) {
   if (currentView === "storage") {
     renderStorageView(filtered);
     updateBulkToolbar();
+    fadeInEl(storageContainer);
     return;
   }
 
@@ -773,6 +780,7 @@ async function applyFiltersAndRender(items) {
     // Listenansicht: bewusst ohne Fotos/Signed-URLs fuer einen schnellen Überblick.
     grid.innerHTML = filtered.map(listRowHtml).join("");
     updateBulkToolbar();
+    fadeInEl(grid);
     return;
   }
 
@@ -808,6 +816,7 @@ async function applyFiltersAndRender(items) {
       </a>`;
     })
     .join("");
+  fadeInEl(grid);
 }
 
 // ---------------------------------------------------------------------
@@ -1451,6 +1460,18 @@ function csvEscape(v) {
     return '"' + s.replace(/"/g, '""') + '"';
   }
   return s;
+}
+
+// Kleiner Ein-/Ausblend-Effekt beim Wechsel zwischen Karten-/Listen-/
+// Lagerort-Ansicht bzw. beim Neu-Filtern, statt eines harten Umschaltens.
+function fadeOutEl(el) {
+  if (el) el.style.opacity = "0";
+}
+function fadeInEl(el) {
+  if (!el) return;
+  requestAnimationFrame(() => {
+    el.style.opacity = "1";
+  });
 }
 
 function escapeHtml(s) {
