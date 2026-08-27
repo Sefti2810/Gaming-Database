@@ -237,6 +237,41 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
 .view-btn:last-child { border-radius: 0 8px 8px 0; border-left: none; }
 .view-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
+/* Bulk-Bearbeitung: Symbolleiste, die auftaucht, sobald in der Listenansicht
+   mindestens ein Artikel ausgewaehlt ist. */
+.bulk-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 14px; margin-bottom: 14px; font-size: 0.85rem;
+}
+.bulk-toolbar select, .bulk-toolbar input[type="text"] {
+  padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--card); color: var(--text); font-size: 0.85rem;
+}
+.bulk-toolbar #bulk-count { font-weight: 600; color: var(--text); }
+
+/* Lagerort-Ansicht: gruppierte Liste statt Karten/Tabelle */
+.storage-group {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  margin-bottom: 14px; overflow: hidden;
+}
+.storage-group-header {
+  padding: 10px 14px; font-weight: 600; background: var(--surface-2); color: var(--text);
+  display: flex; justify-content: space-between; gap: 10px; font-size: 0.9rem;
+}
+.storage-group-count { color: var(--text-muted); font-weight: 400; font-size: 0.8rem; }
+.storage-group-items a.list-row { border-radius: 0; }
+.storage-group-items a.list-row:first-child { border-radius: 0; border-top: none; }
+.storage-group-items a.list-row:last-child { border-radius: 0 0 var(--radius) var(--radius); }
+
+/* Angebotstext-Generator auf der Artikel-Detailseite */
+.listing-box { margin-top: 16px; }
+.listing-output { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.listing-output textarea {
+  width: 100%; font-family: inherit; font-size: 0.9rem; padding: 10px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text); resize: vertical;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -281,7 +316,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
 /* Listenansicht: kompakte Zeilen ohne Fotos, fuer einen schnellen Überblick */
 .list-header {
   display: grid;
-  grid-template-columns: 110px 2fr 1.3fr 1.4fr 90px 90px;
+  grid-template-columns: 28px 110px 2fr 1.3fr 1.4fr 90px 90px;
   gap: 10px;
   padding: 6px 14px;
   font-size: 0.75rem;
@@ -290,7 +325,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
 }
 .list-row {
   display: grid;
-  grid-template-columns: 110px 2fr 1.3fr 1.4fr 90px 90px;
+  grid-template-columns: 28px 110px 2fr 1.3fr 1.4fr 90px 90px;
   gap: 10px;
   align-items: center;
   padding: 10px 14px;
@@ -300,6 +335,9 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
   color: var(--text);
   font-size: 0.9rem;
 }
+.list-check { display: flex; align-items: center; }
+.list-check input, .list-row-check { width: 16px; height: 16px; cursor: pointer; }
+.list-row-link { display: contents; color: inherit; text-decoration: none; cursor: pointer; }
 .list-row:first-child { border-top: 1px solid var(--border); border-radius: var(--radius) var(--radius) 0 0; }
 .list-row:last-child { border-radius: 0 0 var(--radius) var(--radius); }
 .list-row:hover { background: var(--surface-2); text-decoration: none; }
@@ -312,6 +350,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
 @media (max-width: 720px) {
   .list-header { display: none; }
   .list-row { grid-template-columns: 1fr 1fr; grid-auto-rows: auto; row-gap: 4px; }
+  .list-check { display: none; }
 }
 .card-prices { display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.85rem; color: var(--text-muted); }
 

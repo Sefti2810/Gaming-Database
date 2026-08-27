@@ -42,6 +42,9 @@ const CONDITION_OPTIONS = [
   "Neu/OVP", "Sehr guter Zustand", "Guter Zustand", "Gebrauchsspuren",
   "Ohne Verpackung", "Ohne Anleitung", "Defekt/Ersatzteile",
 ];
+const REGION_OPTIONS = [
+  "PAL (DE)", "PAL (EU)", "NTSC (US)", "NTSC-J (JP)", "Region-Free",
+];
 
 // Verkaufsstatus-Vermerk je Artikel (z. B. "zum Verkauf vorgesehen"/"nicht zu verkaufen").
 const SALE_STATUS = {
@@ -196,6 +199,7 @@ document.getElementById("logout-btn").addEventListener("click", async () => {
 });
 
 document.getElementById("export-btn").addEventListener("click", exportCsv);
+document.getElementById("export-pdf-btn").addEventListener("click", exportPdf);
 
 // ---------------------------------------------------------------------
 // Darstellung: Hell/Dunkel-Modus (Vorliebe wird im Browser gemerkt)
@@ -233,10 +237,14 @@ updateThemeButton();
 const VIEW_KEY = "sammlung-view";
 let currentView = "grid";
 try {
-  currentView = localStorage.getItem(VIEW_KEY) === "list" ? "list" : "grid";
+  const savedView = localStorage.getItem(VIEW_KEY);
+  currentView = savedView === "list" || savedView === "storage" ? savedView : "grid";
 } catch (_) {
   // localStorage evtl. nicht verfuegbar - Standardansicht (Karten) nutzen.
 }
+
+// Bulk-Bearbeitung in der Liste-/Lagerort-Ansicht: ausgewaehlte Artikel-IDs.
+let selectedIds = new Set();
 
 // ---------------------------------------------------------------------
 // Router
@@ -450,6 +458,7 @@ async function renderIndex() {
     return;
   }
 
+  selectedIds.clear();
   renderStats(items);
   populateFilters(items);
   restoreFilterState();
@@ -462,10 +471,14 @@ async function renderIndex() {
   });
   document.getElementById("view-grid-btn").addEventListener("click", () => setView("grid", items));
   document.getElementById("view-list-btn").addEventListener("click", () => setView("list", items));
+  document.getElementById("view-storage-btn").addEventListener("click", () => setView("storage", items));
+  setupBulkToolbar(items);
+  ensureBulkCheckboxHandler();
 }
 
 function setView(view, items) {
   currentView = view;
+  if (view === "grid") selectedIds.clear();
   try {
     localStorage.setItem(VIEW_KEY, view);
   } catch (_) {
@@ -478,13 +491,110 @@ function setView(view, items) {
 function updateViewButtons() {
   const gridBtn = document.getElementById("view-grid-btn");
   const listBtn = document.getElementById("view-list-btn");
+  const storageBtn = document.getElementById("view-storage-btn");
   const listHeader = document.getElementById("list-header");
   const grid = document.getElementById("grid");
+  const storageView = document.getElementById("storage-view");
   if (!gridBtn || !listBtn) return;
   gridBtn.classList.toggle("active", currentView === "grid");
   listBtn.classList.toggle("active", currentView === "list");
+  if (storageBtn) storageBtn.classList.toggle("active", currentView === "storage");
   if (listHeader) listHeader.classList.toggle("hidden", currentView !== "list");
-  if (grid) grid.classList.toggle("list", currentView === "list");
+  if (grid) {
+    grid.classList.toggle("list", currentView === "list");
+    grid.classList.toggle("hidden", currentView === "storage");
+  }
+  if (storageView) storageView.classList.toggle("hidden", currentView !== "storage");
+}
+
+// ---------------------------------------------------------------------
+// Bulk-Bearbeitung: Checkboxen in der Liste-/Lagerort-Ansicht erlauben,
+// mehrere Artikel gleichzeitig zu bearbeiten (Status, Lagerort, Konsole).
+// ---------------------------------------------------------------------
+let bulkChangeBound = false;
+function ensureBulkCheckboxHandler() {
+  if (bulkChangeBound) return;
+  bulkChangeBound = true;
+  document.getElementById("main").addEventListener("change", (e) => {
+    if (e.target.id === "list-select-all") {
+      const checked = e.target.checked;
+      document.querySelectorAll(".list-row-check").forEach((cb) => {
+        cb.checked = checked;
+        const id = Number(cb.dataset.id);
+        if (checked) selectedIds.add(id);
+        else selectedIds.delete(id);
+      });
+      updateBulkToolbar();
+      return;
+    }
+    const cb = e.target.closest(".list-row-check");
+    if (!cb) return;
+    const id = Number(cb.dataset.id);
+    if (cb.checked) selectedIds.add(id);
+    else selectedIds.delete(id);
+    updateBulkToolbar();
+  });
+}
+
+function updateBulkToolbar() {
+  const toolbar = document.getElementById("bulk-toolbar");
+  if (!toolbar) return;
+  const showToolbar = selectedIds.size > 0 && (currentView === "list" || currentView === "storage");
+  toolbar.classList.toggle("hidden", !showToolbar);
+  const countEl = document.getElementById("bulk-count");
+  if (countEl) countEl.textContent = `${selectedIds.size} ausgewählt`;
+  const selectAll = document.getElementById("list-select-all");
+  if (selectAll) {
+    const visibleIds = Array.from(document.querySelectorAll(".list-row-check")).map((cb) => Number(cb.dataset.id));
+    selectAll.checked = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  }
+}
+
+async function bulkUpdate(fields, items) {
+  if (selectedIds.size === 0) return;
+  const ids = Array.from(selectedIds);
+  if (!confirm(`${ids.length} Artikel aktualisieren?`)) return;
+  const { error } = await supabase.from("items").update(fields).in("id", ids);
+  if (error) {
+    flash("⚠️ Fehler bei der Bulk-Bearbeitung: " + error.message);
+    return;
+  }
+  flash(`${ids.length} Artikel aktualisiert.`);
+  selectedIds.clear();
+  renderIndex();
+}
+
+function setupBulkToolbar(items) {
+  document.getElementById("bulk-apply-status").addEventListener("click", () => {
+    const val = document.getElementById("bulk-sale-status").value;
+    if (val === "__keep__") {
+      flash("Bitte zuerst einen Status auswählen.");
+      return;
+    }
+    bulkUpdate({ sale_status: val || null }, items);
+  });
+  document.getElementById("bulk-apply-storage").addEventListener("click", () => {
+    const val = document.getElementById("bulk-storage-location").value.trim();
+    bulkUpdate({ storage_location: val }, items);
+  });
+  document.getElementById("bulk-apply-console").addEventListener("click", () => {
+    const val = document.getElementById("bulk-console").value.trim();
+    if (!val) {
+      flash("Bitte eine Konsole zum Umbenennen eingeben.");
+      return;
+    }
+    bulkUpdate({ console: val }, items);
+  });
+  document.getElementById("bulk-clear").addEventListener("click", () => {
+    selectedIds.clear();
+    applyFiltersAndRender(items);
+  });
+}
+
+// Fuer verkaufte Artikel: den tatsaechlichen Verkaufspreis nutzen, wenn
+// vorhanden, sonst ersatzweise den geschaetzten Wert (falls nie nachgetragen).
+function realizedValue(item) {
+  return item.sold_price != null ? Number(item.sold_price) : Number(item.estimated_value) || 0;
 }
 
 function renderStats(items) {
@@ -492,15 +602,17 @@ function renderStats(items) {
   const totalInvested = items.reduce((s, i) => s + (Number(i.purchase_price) || 0), 0);
   const totalEstimated = items.reduce((s, i) => s + (Number(i.estimated_value) || 0), 0);
   const diff = totalEstimated - totalInvested;
-  const totalSold = items
-    .filter((i) => i.sale_status === "sold")
-    .reduce((s, i) => s + (Number(i.estimated_value) || 0), 0);
+  const soldItems = items.filter((i) => i.sale_status === "sold");
+  const totalSold = soldItems.reduce((s, i) => s + realizedValue(i), 0);
+  const soldInvested = soldItems.reduce((s, i) => s + (Number(i.purchase_price) || 0), 0);
+  const soldProfit = totalSold - soldInvested;
   document.getElementById("stats").innerHTML = `
     <div class="stat-card"><div class="stat-label">Artikel gesamt</div><div class="stat-value">${totalItems}</div></div>
     <div class="stat-card"><div class="stat-label">Investiert (Kaufpreise)</div><div class="stat-value">${totalInvested.toFixed(2)} €</div></div>
     <div class="stat-card"><div class="stat-label">Geschätzter Wert</div><div class="stat-value">${totalEstimated.toFixed(2)} €</div></div>
     <div class="stat-card ${diff >= 0 ? "pos" : "neg"}"><div class="stat-label">Differenz</div><div class="stat-value">${diff >= 0 ? "+" : ""}${diff.toFixed(2)} €</div></div>
-    <div class="stat-card"><div class="stat-label">Bereits verkauft (Wert)</div><div class="stat-value">${totalSold.toFixed(2)} €</div></div>
+    <div class="stat-card"><div class="stat-label">Bereits verkauft (Erlös)</div><div class="stat-value">${totalSold.toFixed(2)} €</div></div>
+    <div class="stat-card ${soldProfit >= 0 ? "pos" : "neg"}"><div class="stat-label">Realisierter Gewinn/Verlust</div><div class="stat-value">${soldProfit >= 0 ? "+" : ""}${soldProfit.toFixed(2)} €</div></div>
   `;
   renderConsoleBreakdown(items);
 }
@@ -515,7 +627,7 @@ function renderConsoleBreakdown(items) {
     byConsole[key].count += 1;
     byConsole[key].invested += Number(i.purchase_price) || 0;
     byConsole[key].estimated += Number(i.estimated_value) || 0;
-    if (i.sale_status === "sold") byConsole[key].sold += Number(i.estimated_value) || 0;
+    if (i.sale_status === "sold") byConsole[key].sold += realizedValue(i);
   });
   const rows = Object.entries(byConsole).sort((a, b) => b[1].count - a[1].count);
   if (rows.length === 0) {
@@ -542,6 +654,56 @@ function renderConsoleBreakdown(items) {
       </tbody>
     </table>
   `;
+}
+
+// Eine Zeile der Listenansicht (auch von der Lagerort-Ansicht wiederverwendet).
+// Die Checkbox liegt bewusst AUSSERHALB des <a>, damit ein Klick darauf nicht
+// gleichzeitig zum Artikel navigiert.
+function listRowHtml(item) {
+  const checked = selectedIds.has(item.id) ? "checked" : "";
+  return `
+      <div class="list-row">
+        <span class="list-check"><input type="checkbox" class="list-row-check" data-id="${item.id}" ${checked}></span>
+        <a class="list-row-link" href="#/item/${item.id}">
+          <span class="badge-inline badge-${item.type}">${TYPE_LABELS[item.type] || item.type}</span>
+          <span class="list-title">${escapeHtml(item.title) || "(ohne Titel)"}${item.coop_campaign ? ' <span class="coop-badge">🎮 Koop</span>' : ""}</span>
+          <span class="list-console">${escapeHtml(item.console)}</span>
+          <span class="list-status">${saleBadgeHtml(item.sale_status) || "–"}</span>
+          <span class="list-price">${item.purchase_price != null ? Number(item.purchase_price).toFixed(2) + " €" : "–"}</span>
+          <span class="list-price">${item.estimated_value != null ? Number(item.estimated_value).toFixed(2) + " €" : "–"}</span>
+        </a>
+      </div>`;
+}
+
+// Lagerort-Ansicht: die gefilterten Artikel nach Lagerort gruppiert darstellen,
+// damit man auf einen Blick sieht, was in welcher Kiste/welchem Regal liegt.
+function renderStorageView(filtered) {
+  const container = document.getElementById("storage-view");
+  if (!container) return;
+  const NO_LOCATION = "(Ohne Lagerort)";
+  const groups = {};
+  filtered.forEach((item) => {
+    const key = item.storage_location && item.storage_location.trim() ? item.storage_location.trim() : NO_LOCATION;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(item);
+  });
+  const sortedKeys = Object.keys(groups).sort((a, b) => {
+    if (a === NO_LOCATION) return 1;
+    if (b === NO_LOCATION) return -1;
+    return a.localeCompare(b);
+  });
+  container.innerHTML = sortedKeys
+    .map(
+      (key) => `
+    <div class="storage-group">
+      <div class="storage-group-header">
+        <span>${escapeHtml(key)}</span>
+        <span class="storage-group-count">${groups[key].length} Artikel</span>
+      </div>
+      <div class="storage-group-items">${groups[key].map(listRowHtml).join("")}</div>
+    </div>`
+    )
+    .join("");
 }
 
 async function applyFiltersAndRender(items) {
@@ -590,29 +752,27 @@ async function applyFiltersAndRender(items) {
   updateViewButtons();
 
   const grid = document.getElementById("grid");
+  const storageContainer = document.getElementById("storage-view");
   const empty = document.getElementById("empty-state");
   if (filtered.length === 0) {
     grid.innerHTML = "";
+    if (storageContainer) storageContainer.innerHTML = "";
     empty.classList.remove("hidden");
+    updateBulkToolbar();
     return;
   }
   empty.classList.add("hidden");
 
+  if (currentView === "storage") {
+    renderStorageView(filtered);
+    updateBulkToolbar();
+    return;
+  }
+
   if (currentView === "list") {
     // Listenansicht: bewusst ohne Fotos/Signed-URLs fuer einen schnellen Überblick.
-    grid.innerHTML = filtered
-      .map(
-        (item) => `
-      <a class="list-row" href="#/item/${item.id}">
-        <span class="badge-inline badge-${item.type}">${TYPE_LABELS[item.type] || item.type}</span>
-        <span class="list-title">${escapeHtml(item.title) || "(ohne Titel)"}${item.coop_campaign ? ' <span class="coop-badge">🎮 Koop</span>' : ""}</span>
-        <span class="list-console">${escapeHtml(item.console)}</span>
-        <span class="list-status">${saleBadgeHtml(item.sale_status) || "–"}</span>
-        <span class="list-price">${item.purchase_price != null ? Number(item.purchase_price).toFixed(2) + " €" : "–"}</span>
-        <span class="list-price">${item.estimated_value != null ? Number(item.estimated_value).toFixed(2) + " €" : "–"}</span>
-      </a>`
-      )
-      .join("");
+    grid.innerHTML = filtered.map(listRowHtml).join("");
+    updateBulkToolbar();
     return;
   }
 
@@ -662,6 +822,7 @@ function renderAdd() {
   const consoleCombo = enhanceCombo(document.getElementById("f-console"), CONSOLE_OPTIONS);
   const categoryCombo = enhanceCombo(document.getElementById("f-category"), CATEGORY_OPTIONS);
   const conditionCombo = enhanceCombo(document.getElementById("f-condition"), CONDITION_OPTIONS);
+  enhanceCombo(document.getElementById("f-region"), REGION_OPTIONS);
 
   const photoInput = document.getElementById("photo-input");
   const photoPreviews = document.getElementById("photo-previews");
@@ -740,7 +901,9 @@ function renderAdd() {
         details: document.getElementById("f-details").value.trim(),
         purchase_price: parseFloatOrNull(document.getElementById("f-purchase").value),
         estimated_value: parseFloatOrNull(document.getElementById("f-estimated").value),
+        region: document.getElementById("f-region").value.trim(),
         sale_status: document.getElementById("f-sale-status").value || null,
+        sold_price: parseFloatOrNull(document.getElementById("f-sold-price").value),
         storage_location: document.getElementById("f-storage-location").value.trim(),
         coop_campaign: document.getElementById("f-coop").checked,
         notes: document.getElementById("f-notes").value.trim(),
@@ -918,16 +1081,20 @@ async function renderItem(id) {
   document.getElementById("e-category").value = item.category || "";
   document.getElementById("e-condition").value = item.condition_text || "";
   document.getElementById("e-details").value = item.details || "";
+  document.getElementById("e-region").value = item.region || "";
 
   enhanceCombo(document.getElementById("e-console"), CONSOLE_OPTIONS);
   enhanceCombo(document.getElementById("e-category"), CATEGORY_OPTIONS);
   enhanceCombo(document.getElementById("e-condition"), CONDITION_OPTIONS);
+  enhanceCombo(document.getElementById("e-region"), REGION_OPTIONS);
   document.getElementById("e-purchase").value = item.purchase_price ?? "";
   document.getElementById("e-estimated").value = item.estimated_value ?? "";
   document.getElementById("e-sale-status").value = item.sale_status || "";
+  document.getElementById("e-sold-price").value = item.sold_price ?? "";
   document.getElementById("e-storage-location").value = item.storage_location || "";
   document.getElementById("e-coop").checked = !!item.coop_campaign;
   document.getElementById("e-notes").value = item.notes || "";
+  setupListingGenerator(item);
 
   if (item.ai_price_note) {
     const box = document.getElementById("ai-note");
@@ -962,7 +1129,9 @@ async function renderItem(id) {
       details: document.getElementById("e-details").value.trim(),
       purchase_price: parseFloatOrNull(document.getElementById("e-purchase").value),
       estimated_value: parseFloatOrNull(document.getElementById("e-estimated").value),
+      region: document.getElementById("e-region").value.trim(),
       sale_status: document.getElementById("e-sale-status").value || null,
+      sold_price: parseFloatOrNull(document.getElementById("e-sold-price").value),
       storage_location: document.getElementById("e-storage-location").value.trim(),
       coop_campaign: document.getElementById("e-coop").checked,
       notes: document.getElementById("e-notes").value.trim(),
@@ -971,7 +1140,9 @@ async function renderItem(id) {
     if (error) {
       flash("⚠️ Fehler beim Speichern: " + error.message);
     } else {
+      Object.assign(item, payload);
       flash("Änderungen gespeichert.");
+      setupListingGenerator(item);
     }
   });
 
@@ -1010,6 +1181,67 @@ async function renderItem(id) {
     } else {
       flash("Artikel gelöscht.");
       location.hash = "#/";
+    }
+  });
+}
+
+// ---------------------------------------------------------------------
+// Angebotstext-Generator: fuer Artikel, die zum Verkauf vorgesehen oder
+// reserviert sind, wird auf Knopfdruck ein fertiger Text zum Copy-Pasten
+// (z.B. fuer eBay Kleinanzeigen) erzeugt.
+// ---------------------------------------------------------------------
+function buildListingText(item) {
+  const lines = [];
+  const consoleLabel = item.console ? ` (${item.console})` : "";
+  lines.push(`${item.title || "Artikel"}${consoleLabel}`);
+  if (item.category) lines.push(`Genre/Kategorie: ${item.category}`);
+  if (item.condition_text) lines.push(`Zustand: ${item.condition_text}`);
+  if (item.region) lines.push(`Region: ${item.region}`);
+  if (item.details) lines.push(item.details);
+  const price = item.estimated_value != null ? Number(item.estimated_value).toFixed(2) + " €" : null;
+  if (price) lines.push(`Preis: ${price} VB`);
+  if (item.sale_status === "reserved") lines.push("(Aktuell reserviert)");
+  lines.push("Abholung oder Versand (zzgl. Versandkosten) möglich.");
+  return lines.join("\n");
+}
+
+function setupListingGenerator(item) {
+  const box = document.getElementById("listing-box");
+  if (!box) return;
+  const showFor = item.sale_status === "for_sale" || item.sale_status === "reserved";
+  box.classList.toggle("hidden", !showFor);
+  if (!showFor) return;
+
+  const btn = document.getElementById("listing-btn");
+  const output = document.getElementById("listing-output");
+  const textarea = document.getElementById("listing-text");
+  const copyBtn = document.getElementById("listing-copy-btn");
+  const copyStatus = document.getElementById("listing-copy-status");
+
+  // Alte Listener entfernen (setupListingGenerator kann nach dem Speichern
+  // erneut aufgerufen werden), indem die Buttons per Klon ersetzt werden.
+  const freshBtn = btn.cloneNode(true);
+  btn.replaceWith(freshBtn);
+  const freshCopyBtn = copyBtn.cloneNode(true);
+  copyBtn.replaceWith(freshCopyBtn);
+
+  freshBtn.addEventListener("click", () => {
+    textarea.value = buildListingText(item);
+    output.classList.remove("hidden");
+    copyStatus.textContent = "";
+  });
+  freshCopyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(textarea.value);
+      copyStatus.textContent = "✅ Kopiert!";
+    } catch (_) {
+      textarea.select();
+      try {
+        document.execCommand("copy");
+        copyStatus.textContent = "✅ Kopiert!";
+      } catch (__) {
+        copyStatus.textContent = "⚠️ Kopieren nicht möglich – bitte manuell markieren.";
+      }
     }
   });
 }
@@ -1056,17 +1288,19 @@ async function exportCsv() {
     flash("⚠️ Export fehlgeschlagen: " + error.message);
     return;
   }
-  const header = ["Typ", "Titel", "Konsole", "Kategorie", "Zustand", "Details", "Kaufpreis", "Geschaetzter Wert", "Verkaufsstatus", "Lagerort", "Koop/Kampagne", "Notizen", "Erstellt"];
+  const header = ["Typ", "Titel", "Konsole", "Region", "Kategorie", "Zustand", "Details", "Kaufpreis", "Geschaetzter Wert", "Verkaufsstatus", "Verkaufspreis", "Lagerort", "Koop/Kampagne", "Notizen", "Erstellt"];
   const rows = items.map((r) => [
     TYPE_LABELS[r.type] || r.type,
     r.title,
     r.console,
+    r.region || "",
     r.category,
     r.condition_text,
     r.details,
     r.purchase_price ?? "",
     r.estimated_value ?? "",
     (SALE_STATUS[r.sale_status] && SALE_STATUS[r.sale_status].label) || "",
+    r.sold_price ?? "",
     r.storage_location || "",
     r.coop_campaign ? "Ja" : "",
     r.notes,
@@ -1080,6 +1314,135 @@ async function exportCsv() {
   a.download = "sammlung_export.csv";
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ---------------------------------------------------------------------
+// PDF-Export (z.B. als Nachweis fuer eine Versicherung): Liste aller
+// Artikel mit Miniaturbild, Zustand und Wert, gruppiert nach Konsole,
+// plus Gesamtwert am Ende.
+// ---------------------------------------------------------------------
+async function imageUrlToJpegDataUrl(url, maxSize) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    const bitmap = await createImageBitmap(blob);
+    const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    // Als JPEG re-encodieren, damit jsPDF unabhaengig vom Originalformat
+    // (PNG/WebP/JPEG) immer ein einheitliches, kompatibles Bild bekommt.
+    return canvas.toDataURL("image/jpeg", 0.82);
+  } catch (_) {
+    // z.B. Netzwerkfehler oder eine Bildquelle ohne CORS-Freigabe - Zeile
+    // wird dann einfach ohne Miniaturbild ausgegeben.
+    return null;
+  }
+}
+
+async function exportPdf() {
+  flash("Erstelle PDF…");
+  try {
+    const { data: items, error } = await supabase
+      .from("items")
+      .select("*")
+      .order("console", { ascending: true })
+      .order("title", { ascending: true });
+    if (error) throw error;
+
+    const { jsPDF } = await import("https://esm.sh/jspdf@2.5.2");
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 40;
+    let y = margin;
+
+    doc.setFontSize(16);
+    doc.setFont(undefined, "bold");
+    doc.text("Sammlung-Tracker – Inventarliste", margin, y);
+    doc.setFont(undefined, "normal");
+    y += 18;
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    doc.text(`Erstellt am ${new Date().toLocaleDateString("de-DE")} · ${items.length} Artikel`, margin, y);
+    doc.setTextColor(0);
+    y += 22;
+
+    const firstPhotoPaths = items.map((i) => i.photos?.[0]).filter(Boolean);
+    const urlMap = await getSignedUrlMap(firstPhotoPaths);
+
+    const thumbSize = 30;
+    const rowHeight = 38;
+    let currentConsole = null;
+
+    for (const item of items) {
+      const consoleLabel = item.console || "(ohne Konsole)";
+      if (consoleLabel !== currentConsole) {
+        currentConsole = consoleLabel;
+        if (y + 26 > pageHeight - margin) {
+          doc.addPage();
+          y = margin;
+        }
+        y += 6;
+        doc.setFontSize(11);
+        doc.setFont(undefined, "bold");
+        doc.text(consoleLabel, margin, y);
+        doc.setFont(undefined, "normal");
+        doc.setFontSize(9);
+        y += 12;
+      }
+
+      if (y + rowHeight > pageHeight - margin) {
+        doc.addPage();
+        y = margin;
+      }
+
+      const photoUrl = item.photos?.[0] ? urlMap[item.photos[0]] : null;
+      if (photoUrl) {
+        const dataUrl = await imageUrlToJpegDataUrl(photoUrl, 96);
+        if (dataUrl) {
+          try {
+            doc.addImage(dataUrl, "JPEG", margin, y, thumbSize, thumbSize);
+          } catch (_) {
+            // Bild konnte nicht eingebettet werden - Zeile ohne Bild weiterschreiben.
+          }
+        }
+      }
+
+      const textX = margin + thumbSize + 10;
+      doc.setFont(undefined, "bold");
+      doc.text(item.title || "(ohne Titel)", textX, y + 12);
+      doc.setFont(undefined, "normal");
+      const sub = [item.condition_text, item.region].filter(Boolean).join(" · ");
+      if (sub) doc.text(sub, textX, y + 24);
+      const value = item.estimated_value != null ? Number(item.estimated_value).toFixed(2) + " €" : "–";
+      doc.text(value, pageWidth - margin, y + 18, { align: "right" });
+      y += rowHeight;
+    }
+
+    const total = items.reduce((s, i) => s + (Number(i.estimated_value) || 0), 0);
+    if (y + 30 > pageHeight - margin) {
+      doc.addPage();
+      y = margin;
+    }
+    y += 10;
+    doc.setDrawColor(200);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 20;
+    doc.setFontSize(12);
+    doc.setFont(undefined, "bold");
+    doc.text(`Gesamtwert (geschätzt): ${total.toFixed(2)} €`, margin, y);
+
+    doc.save("sammlung_inventar.pdf");
+    flash("PDF erstellt und heruntergeladen.");
+  } catch (err) {
+    flash("⚠️ PDF-Export fehlgeschlagen: " + (err.message || err));
+  }
 }
 
 function csvEscape(v) {
