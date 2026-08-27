@@ -58,6 +58,62 @@ function saleBadgeHtml(status) {
   return s ? `<span class="sale-badge ${s.cls}">${s.label}</span>` : "";
 }
 
+// Kurze Varianten der Verkaufsstatus-Labels fuer das direkt in Karten-/
+// Listenansicht editierbare Auswahlfeld (kompakter als im Formular).
+const SALE_STATUS_INLINE_OPTIONS = [
+  { value: "", label: "–" },
+  { value: "for_sale", label: "Zum Verkauf" },
+  { value: "reserved", label: "Reserviert" },
+  { value: "sold", label: "Verkauft" },
+  { value: "not_for_sale", label: "Nicht verkäuflich" },
+];
+
+// Verkaufsstatus-"Badge", das gleichzeitig ein <select> ist: antippen und
+// direkt umstellen, ohne den Artikel zu oeffnen. Ohne Vermerk erscheint es
+// als schlichtes helles Feld (statt leer/unsichtbar).
+function saleStatusInlineHtml(item) {
+  const currentCls = (SALE_STATUS[item.sale_status] && SALE_STATUS[item.sale_status].cls) || "";
+  const current = item.sale_status || "";
+  const options = SALE_STATUS_INLINE_OPTIONS.map(
+    (o) => `<option value="${o.value}" ${current === o.value ? "selected" : ""}>${o.label}</option>`
+  ).join("");
+  return `<select class="sale-status-inline ${currentCls}" data-id="${item.id}">${options}</select>`;
+}
+
+// Bindet die Aenderungs-Logik an alle im Container vorhandenen Inline-
+// Statusfelder. Wird nach jedem Neuaufbau von Karten-/Listen-/Lagerort-
+// Ansicht erneut aufgerufen. Klicks auf das <select> selbst duerfen NICHT
+// zur Kartennavigation (umschliessendes <a>) fuehren, deshalb stopPropagation
+// direkt am Element (nicht ueber Delegation, die waere hier zu spaet dran).
+function bindInlineStatusSelects(container, items) {
+  if (!container) return;
+  container.querySelectorAll(".sale-status-inline").forEach((sel) => {
+    sel.addEventListener("mousedown", (e) => e.stopPropagation());
+    sel.addEventListener("click", (e) => e.stopPropagation());
+    sel.addEventListener("change", async (e) => {
+      e.stopPropagation();
+      const id = Number(sel.dataset.id);
+      const value = sel.value;
+      // defaultSelected spiegelt das urspruengliche "selected"-Attribut aus dem
+      // zuletzt gerenderten HTML wider - dient hier als Rueckfall-Wert bei Fehlern.
+      const before = Array.from(sel.options).find((o) => o.defaultSelected)?.value ?? "";
+      sel.disabled = true;
+      const { error } = await supabase.from("items").update({ sale_status: value || null }).eq("id", id);
+      sel.disabled = false;
+      if (error) {
+        flash("⚠️ Status konnte nicht geändert werden: " + error.message);
+        sel.value = before;
+        return;
+      }
+      const item = items.find((i) => i.id === id);
+      if (item) item.sale_status = value || null;
+      flash("Status aktualisiert.");
+      renderStats(items);
+      applyFiltersAndRender(items);
+    });
+  });
+}
+
 // Verwandelt ein normales Text-Input in ein Kombifeld: ein echtes <select>
 // (genau wie beim Typ-Feld - auf dem Handy also der native Auswahl-Picker)
 // mit den Vorschlaegen, plus einer Option "Eigener Text", die ein Textfeld
@@ -672,7 +728,7 @@ function listRowHtml(item) {
           <span class="badge-inline badge-${item.type}">${TYPE_LABELS[item.type] || item.type}</span>
           <span class="list-title">${escapeHtml(item.title) || "(ohne Titel)"}${item.coop_campaign ? ' <span class="coop-badge">🎮 Koop</span>' : ""}</span>
           <span class="list-console">${escapeHtml(item.console)}</span>
-          <span class="list-status">${saleBadgeHtml(item.sale_status) || "–"}</span>
+          <span class="list-status">${saleStatusInlineHtml(item)}</span>
           <span class="list-price">${item.purchase_price != null ? Number(item.purchase_price).toFixed(2) + " €" : "–"}</span>
           <span class="list-price">${item.estimated_value != null ? Number(item.estimated_value).toFixed(2) + " €" : "–"}</span>
         </a>
@@ -772,6 +828,7 @@ async function applyFiltersAndRender(items) {
   if (currentView === "storage") {
     renderStorageView(filtered);
     updateBulkToolbar();
+    bindInlineStatusSelects(storageContainer, items);
     fadeInEl(storageContainer);
     return;
   }
@@ -780,6 +837,7 @@ async function applyFiltersAndRender(items) {
     // Listenansicht: bewusst ohne Fotos/Signed-URLs fuer einen schnellen Überblick.
     grid.innerHTML = filtered.map(listRowHtml).join("");
     updateBulkToolbar();
+    bindInlineStatusSelects(grid, items);
     fadeInEl(grid);
     return;
   }
@@ -803,11 +861,7 @@ async function applyFiltersAndRender(items) {
           <div class="card-title">${escapeHtml(item.title) || "(ohne Titel)"}</div>
           <div class="card-console">${escapeHtml(item.console)}</div>
           ${item.category ? `<div class="card-category">${escapeHtml(item.category)}</div>` : ""}
-          ${
-            item.sale_status || item.coop_campaign
-              ? `<div class="card-sale">${saleBadgeHtml(item.sale_status)}${item.coop_campaign ? ' <span class="coop-badge">🎮 Koop</span>' : ""}</div>`
-              : ""
-          }
+          <div class="card-sale">${saleStatusInlineHtml(item)}${item.coop_campaign ? ' <span class="coop-badge">🎮 Koop</span>' : ""}</div>
           <div class="card-prices">
             <span>Kauf: ${item.purchase_price != null ? Number(item.purchase_price).toFixed(2) + " €" : "–"}</span>
             <span>Wert: ${item.estimated_value != null ? Number(item.estimated_value).toFixed(2) + " €" : "–"}</span>
@@ -816,6 +870,7 @@ async function applyFiltersAndRender(items) {
       </a>`;
     })
     .join("");
+  bindInlineStatusSelects(grid, items);
   fadeInEl(grid);
 }
 

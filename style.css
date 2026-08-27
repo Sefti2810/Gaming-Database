@@ -343,6 +343,26 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
 .sale-sold { background: rgba(120,115,106,0.2); color: var(--text-muted); }
 .sale-not-for-sale { background: rgba(178,58,58,0.15); color: var(--neg); }
 
+/* Verkaufsstatus direkt in Karten-/Listenansicht aenderbar: ein <select>,
+   das wie ein Badge aussieht, statt reinem Text - antippen genuegt, ohne
+   den Artikel oeffnen zu muessen. Ohne Vermerk: schlichtes helles Feld. */
+.sale-status-inline {
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  border: none; border-radius: 20px; padding: 3px 22px 3px 10px;
+  font-size: 0.72rem; font-weight: 600; font-family: inherit;
+  cursor: pointer; color: var(--text-muted); background-color: var(--surface-2);
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='%2378736a' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 7px center; background-size: 9px;
+  max-width: 100%;
+}
+.sale-status-inline:hover { filter: brightness(0.97); }
+.sale-status-inline:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sale-status-inline:disabled { opacity: 0.6; cursor: wait; }
+.sale-status-inline.sale-for-sale { background-color: rgba(47,125,79,0.15); color: var(--pos); }
+.sale-status-inline.sale-reserved { background-color: rgba(217,138,79,0.18); color: var(--accent-dark); }
+.sale-status-inline.sale-sold { background-color: rgba(120,115,106,0.2); color: var(--text-muted); }
+.sale-status-inline.sale-not-for-sale { background-color: rgba(178,58,58,0.15); color: var(--neg); }
+
 /* Listenansicht: kompakte Zeilen ohne Fotos, fuer einen schnellen Überblick */
 .list-header {
   display: grid;
@@ -373,6 +393,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
 .list-row:hover { background: var(--surface-2); text-decoration: none; }
 .list-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .list-console, .list-price { color: var(--text-muted); font-size: 0.85rem; }
+.list-status { min-width: 0; overflow: hidden; }
 .badge-inline {
   display: inline-block; font-size: 0.7rem; padding: 3px 8px; border-radius: 20px;
   background: var(--surface-2); color: var(--text-muted); text-align: center; white-space: nowrap;
