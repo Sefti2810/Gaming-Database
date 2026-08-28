@@ -114,6 +114,43 @@ function bindInlineStatusSelects(container, items) {
   });
 }
 
+// Favoriten-Stern (⭐/☆): eigenstaendiger Button, bewusst AUSSERHALB jeder
+// <a>-Verlinkung platziert (siehe Kommentar bei den Status-Feldern) - antippen
+// schaltet den Favoritenstatus um, ohne den Artikel zu oeffnen.
+function favoriteButtonHtml(item) {
+  const fav = !!item.is_favorite;
+  return `<button type="button" class="fav-btn ${fav ? "is-fav" : ""}" data-id="${item.id}" title="${fav ? "Favorit entfernen" : "Als Favorit markieren"}" aria-label="Favorit">${fav ? "⭐" : "☆"}</button>`;
+}
+
+function bindFavoriteButtons(container, items) {
+  if (!container) return;
+  container.querySelectorAll(".fav-btn").forEach((btn) => {
+    btn.addEventListener("mousedown", (e) => e.stopPropagation());
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const id = Number(btn.dataset.id);
+      const item = items.find((i) => i.id === id);
+      if (!item) return;
+      const next = !item.is_favorite;
+      btn.disabled = true;
+      const { error } = await supabase.from("items").update({ is_favorite: next }).eq("id", id);
+      btn.disabled = false;
+      if (error) {
+        flash("⚠️ Favorit konnte nicht geändert werden: " + error.message);
+        return;
+      }
+      item.is_favorite = next;
+      btn.classList.toggle("is-fav", next);
+      btn.textContent = next ? "⭐" : "☆";
+      btn.title = next ? "Favorit entfernen" : "Als Favorit markieren";
+      // Falls der "Nur Favoriten"-Filter aktiv ist, muss der Artikel beim
+      // Entfernen sofort aus der Ansicht verschwinden.
+      applyFiltersAndRender(items);
+    });
+  });
+}
+
 // Verwandelt ein normales Text-Input in ein Kombifeld: ein echtes <select>
 // (genau wie beim Typ-Feld - auf dem Handy also der native Auswahl-Picker)
 // mit den Vorschlaegen, plus einer Option "Eigener Text", die ein Textfeld
@@ -409,6 +446,8 @@ function restoreFilterState() {
   if (sortSelect) sortSelect.value = savedFilterState.sort || "created_desc";
   const coopBox = form.querySelector('[name="coop_only"]');
   if (coopBox) coopBox.checked = !!savedFilterState.coopOnly;
+  const favBox = form.querySelector('[name="favorites_only"]');
+  if (favBox) favBox.checked = !!savedFilterState.favoritesOnly;
   if (savedFilterState.types) {
     form.querySelectorAll('input[name="type"]').forEach((b) => {
       b.checked = savedFilterState.types.includes(b.value);
@@ -686,26 +725,51 @@ function realizedValue(item) {
   return item.sold_price != null ? Number(item.sold_price) : Number(item.estimated_value) || 0;
 }
 
+function eur(n) {
+  return n == null ? "–" : Number(n).toFixed(2) + " €";
+}
+
+// Potentieller Gewinn eines einzelnen Artikels: geschätzter Marktwert minus
+// Kaufpreis. Nur berechenbar, wenn beide Werte vorhanden sind.
+function potentialProfit(item) {
+  if (item.purchase_price == null || item.estimated_value == null) return null;
+  return Number(item.estimated_value) - Number(item.purchase_price);
+}
+
+function signedEur(n) {
+  if (n == null) return "–";
+  return (n >= 0 ? "+" : "") + Number(n).toFixed(2) + " €";
+}
+
 function renderStats(items) {
   const totalItems = items.length;
   const totalInvested = items.reduce((s, i) => s + (Number(i.purchase_price) || 0), 0);
   const totalEstimated = items.reduce((s, i) => s + (Number(i.estimated_value) || 0), 0);
-  const diff = totalEstimated - totalInvested;
+  const potentialProfit = totalEstimated - totalInvested;
   const soldItems = items.filter((i) => i.sale_status === "sold");
   const totalSold = soldItems.reduce((s, i) => s + realizedValue(i), 0);
   const soldInvested = soldItems.reduce((s, i) => s + (Number(i.purchase_price) || 0), 0);
   const soldProfit = totalSold - soldInvested;
-  const statCard = (icon, label, value, cls) => `
-    <div class="stat-card ${cls || ""}">
+  // "highlight" markiert die zwei wichtigsten Kennzahlen (Wert & potentieller
+  // Gewinn) groesser/betonter, die uebrigen bleiben kompakt - das ersetzt die
+  // vorher sechs gleich grossen Karten durch eine klarere Hierarchie.
+  const statCard = (icon, label, value, cls, highlight) => `
+    <div class="stat-card ${cls || ""} ${highlight ? "highlight" : ""}">
       <div class="stat-icon">${icon}</div>
       <div class="stat-body"><div class="stat-label">${label}</div><div class="stat-value">${value}</div></div>
     </div>`;
   document.getElementById("stats").innerHTML =
     statCard("📦", "Artikel gesamt", totalItems) +
-    statCard("💶", "Investiert (Kaufpreise)", totalInvested.toFixed(2) + " €") +
-    statCard("💰", "Geschätzter Wert", totalEstimated.toFixed(2) + " €") +
-    statCard("📊", "Differenz", (diff >= 0 ? "+" : "") + diff.toFixed(2) + " €", diff >= 0 ? "pos" : "neg") +
-    statCard("✅", "Bereits verkauft (Erlös)", totalSold.toFixed(2) + " €") +
+    statCard("💶", "Investiert", totalInvested.toFixed(2) + " €") +
+    statCard("💰", "Geschätzter Wert", totalEstimated.toFixed(2) + " €", "", true) +
+    statCard(
+      "📊",
+      "Potentieller Gewinn",
+      (potentialProfit >= 0 ? "+" : "") + potentialProfit.toFixed(2) + " €",
+      potentialProfit >= 0 ? "pos" : "neg",
+      true
+    ) +
+    statCard("✅", "Verkaufserlöse", totalSold.toFixed(2) + " €") +
     statCard("📈", "Realisierter Gewinn/Verlust", (soldProfit >= 0 ? "+" : "") + soldProfit.toFixed(2) + " €", soldProfit >= 0 ? "pos" : "neg");
   renderConsoleBreakdown(items);
 }
@@ -759,6 +823,7 @@ function listRowHtml(item) {
   return `
       <div class="list-row">
         <span class="list-check"><input type="checkbox" class="list-row-check" data-id="${item.id}" ${checked}></span>
+        <span class="list-fav">${favoriteButtonHtml(item)}</span>
         <a class="list-row-link" href="#/item/${item.id}">
           <span class="badge-inline badge-${item.type}">${TYPE_LABELS[item.type] || item.type}</span>
           <span class="list-title">${escapeHtml(item.title) || "(ohne Titel)"}${item.coop_campaign ? ' <span class="coop-badge">🎮 Koop</span>' : ""}</span>
@@ -806,7 +871,7 @@ function renderStorageView(filtered) {
 // Zeigt aktive Filter als entfernbare Chips über der Liste an, damit man auf
 // einen Blick sieht, was gerade eingeschränkt ist, und es einzeln wieder
 // aufheben kann, ohne das ganze Filter-Menü zu öffnen.
-function renderFilterChips({ q, types, allTypeCount, consoles, allConsoleCount, saleStatuses, allSaleStatusCount, coopOnly }) {
+function renderFilterChips({ q, types, allTypeCount, consoles, allConsoleCount, saleStatuses, allSaleStatusCount, coopOnly, favoritesOnly }) {
   const box = document.getElementById("filter-chips");
   if (!box) return;
   const chips = [];
@@ -850,6 +915,15 @@ function renderFilterChips({ q, types, allTypeCount, consoles, allConsoleCount, 
       },
     });
   }
+  if (favoritesOnly) {
+    chips.push({
+      label: "⭐ Nur Favoriten",
+      clear: () => {
+        const cb = document.getElementById("favorites-only-filter");
+        if (cb) cb.checked = false;
+      },
+    });
+  }
 
   if (chips.length === 0) {
     box.classList.add("hidden");
@@ -877,6 +951,7 @@ async function applyFiltersAndRender(items) {
   const consoles = fd.getAll("console").map(String);
   const saleStatuses = fd.getAll("sale_status").map(String);
   const coopOnly = fd.get("coop_only") === "on";
+  const favoritesOnly = fd.get("favorites_only") === "on";
   const allTypeCount = form.querySelectorAll('input[name="type"]').length;
   const allConsoleCount = form.querySelectorAll('input[name="console"]').length;
   const allSaleStatusCount = form.querySelectorAll('input[name="sale_status"]').length;
@@ -889,17 +964,24 @@ async function applyFiltersAndRender(items) {
     sort: (sort || "created_desc").toString(),
     saleStatuses,
     coopOnly,
+    favoritesOnly,
   };
 
-  renderFilterChips({ q, types, allTypeCount, consoles, allConsoleCount, saleStatuses, allSaleStatusCount, coopOnly });
+  renderFilterChips({ q, types, allTypeCount, consoles, allConsoleCount, saleStatuses, allSaleStatusCount, coopOnly, favoritesOnly });
   const hasActiveFilter =
-    !!q || types.length < allTypeCount || consoles.length < allConsoleCount || saleStatuses.length < allSaleStatusCount || coopOnly;
+    !!q ||
+    types.length < allTypeCount ||
+    consoles.length < allConsoleCount ||
+    saleStatuses.length < allSaleStatusCount ||
+    coopOnly ||
+    favoritesOnly;
 
   let filtered = items.filter((i) => {
     if (types.length < allTypeCount && !types.includes(i.type || "")) return false;
     if (consoles.length < allConsoleCount && !consoles.includes(i.console || "")) return false;
     if (saleStatuses.length < allSaleStatusCount && !saleStatuses.includes(i.sale_status || "")) return false;
     if (coopOnly && !i.coop_campaign) return false;
+    if (favoritesOnly && !i.is_favorite) return false;
     if (q) {
       const hay = `${i.title} ${i.console} ${i.details} ${i.notes}`.toLowerCase();
       if (!hay.includes(q)) return false;
@@ -907,12 +989,35 @@ async function applyFiltersAndRender(items) {
     return true;
   });
 
+  // Gewinn/Rendite werden nur berechnet, wenn Kaufpreis UND Wert vorhanden sind;
+  // fehlende Werte landen beim Sortieren immer ans Ende, statt die Reihenfolge
+  // durch eine stille 0 zu verfälschen.
+  const marginPct = (i) => {
+    const p = potentialProfit(i);
+    if (p == null || !i.purchase_price) return null;
+    return (p / Number(i.purchase_price)) * 100;
+  };
+  const byNullsLast = (fn, dir) => (a, b) => {
+    const va = fn(a);
+    const vb = fn(b);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    return (va - vb) * dir;
+  };
   const cmp = {
     created_desc: (a, b) => new Date(b.created_at) - new Date(a.created_at),
     created_asc: (a, b) => new Date(a.created_at) - new Date(b.created_at),
     title_asc: (a, b) => (a.title || "").localeCompare(b.title || ""),
+    title_desc: (a, b) => (b.title || "").localeCompare(a.title || ""),
     value_desc: (a, b) => (b.estimated_value || 0) - (a.estimated_value || 0),
     value_asc: (a, b) => (a.estimated_value || 0) - (b.estimated_value || 0),
+    purchase_desc: (a, b) => (b.purchase_price || 0) - (a.purchase_price || 0),
+    purchase_asc: (a, b) => (a.purchase_price || 0) - (b.purchase_price || 0),
+    profit_desc: byNullsLast(potentialProfit, -1),
+    profit_asc: byNullsLast(potentialProfit, 1),
+    margin_desc: byNullsLast(marginPct, -1),
+    margin_asc: byNullsLast(marginPct, 1),
   }[sort] || (() => 0);
   filtered = filtered.sort(cmp);
 
@@ -946,6 +1051,8 @@ async function applyFiltersAndRender(items) {
           if (qInput) qInput.value = "";
           const coopBox = document.getElementById("coop-only-filter");
           if (coopBox) coopBox.checked = false;
+          const favBox = document.getElementById("favorites-only-filter");
+          if (favBox) favBox.checked = false;
           updateAllMsCounts();
           form.dispatchEvent(new Event("input", { bubbles: true }));
         });
@@ -960,6 +1067,7 @@ async function applyFiltersAndRender(items) {
     renderStorageView(filtered);
     updateBulkToolbar();
     bindInlineStatusSelects(storageContainer, items);
+    bindFavoriteButtons(storageContainer, items);
     fadeInEl(storageContainer);
     return;
   }
@@ -969,6 +1077,7 @@ async function applyFiltersAndRender(items) {
     grid.innerHTML = filtered.map(listRowHtml).join("");
     updateBulkToolbar();
     bindInlineStatusSelects(grid, items);
+    bindFavoriteButtons(grid, items);
     fadeInEl(grid);
     return;
   }
@@ -982,15 +1091,17 @@ async function applyFiltersAndRender(items) {
       const photoHtml = photoUrl
         ? `<img src="${photoUrl}" alt="${escapeHtml(item.title)}">`
         : `<div class="no-photo">🎮</div>`;
-      // Der Status-Select liegt bewusst AUSSERHALB der <a>-Verlinkung (als
-      // Geschwister zwischen zwei "display:contents"-Links), damit ein Tipp
-      // darauf nicht gleichzeitig den Artikel öffnet. Auf dem Desktop reichte
-      // dafür ein stopPropagation() im Select, aber auf dem Handy/als
-      // installierte App (PWA) navigiert ein verschachteltes <select> in
-      // manchen Browsern trotzdem zum umschliessenden Link - daher hier
-      // strukturell gelöst, genau wie schon bei der Listenansicht-Checkbox.
+      // Der Status-Select UND der Favoriten-Stern liegen bewusst AUSSERHALB
+      // der <a>-Verlinkung (als Geschwister zwischen zwei "display:contents"-
+      // Links), damit ein Tipp darauf nicht gleichzeitig den Artikel öffnet.
+      // Auf dem Desktop reichte dafür ein stopPropagation(), aber auf dem
+      // Handy/als installierte App (PWA) navigiert ein verschachteltes
+      // interaktives Element in manchen Browsern trotzdem zum umschliessenden
+      // Link - daher hier strukturell gelöst, genau wie bei der Checkbox.
+      const profit = potentialProfit(item);
       return `
       <div class="card">
+        ${favoriteButtonHtml(item)}
         <a class="card-link" href="#/item/${item.id}">
           <div class="card-photo">
             ${photoHtml}
@@ -998,16 +1109,19 @@ async function applyFiltersAndRender(items) {
           </div>
           <div class="card-body-top">
             <div class="card-title">${escapeHtml(item.title) || "(ohne Titel)"}</div>
-            <div class="card-console">${escapeHtml(item.console)}</div>
-            ${item.category ? `<div class="card-category">${escapeHtml(item.category)}</div>` : ""}
+            <div class="card-console">${escapeHtml(item.console)}${item.category ? " · " + escapeHtml(item.category) : ""}</div>
           </div>
         </a>
         <div class="card-sale">${saleStatusInlineHtml(item)}${item.coop_campaign ? ' <span class="coop-badge">🎮 Koop</span>' : ""}</div>
         <a class="card-link" href="#/item/${item.id}">
           <div class="card-body-bottom">
-            <div class="card-prices">
-              <span>Kauf: ${item.purchase_price != null ? Number(item.purchase_price).toFixed(2) + " €" : "–"}</span>
-              <span>Wert: ${item.estimated_value != null ? Number(item.estimated_value).toFixed(2) + " €" : "–"}</span>
+            <div class="card-value-block">
+              <div class="card-value-main">${eur(item.estimated_value)}</div>
+              <div class="card-value-label">Geschätzter Marktwert</div>
+              <div class="card-value-sub">
+                <span>Kauf: ${eur(item.purchase_price)}</span>
+                <span class="${profit == null ? "" : profit >= 0 ? "pos" : "neg"}">Gewinn: ${signedEur(profit)}</span>
+              </div>
             </div>
           </div>
         </a>
@@ -1015,6 +1129,7 @@ async function applyFiltersAndRender(items) {
     })
     .join("");
   bindInlineStatusSelects(grid, items);
+  bindFavoriteButtons(grid, items);
   fadeInEl(grid);
 }
 
@@ -1114,6 +1229,7 @@ function renderAdd() {
         sold_price: parseFloatOrNull(document.getElementById("f-sold-price").value),
         storage_location: document.getElementById("f-storage-location").value.trim(),
         coop_campaign: document.getElementById("f-coop").checked,
+        is_favorite: document.getElementById("f-favorite").checked,
         notes: document.getElementById("f-notes").value.trim(),
         photos,
       };
@@ -1301,6 +1417,7 @@ async function renderItem(id) {
   document.getElementById("e-sold-price").value = item.sold_price ?? "";
   document.getElementById("e-storage-location").value = item.storage_location || "";
   document.getElementById("e-coop").checked = !!item.coop_campaign;
+  document.getElementById("e-favorite").checked = !!item.is_favorite;
   document.getElementById("e-notes").value = item.notes || "";
   setupListingGenerator(item);
 
@@ -1342,6 +1459,7 @@ async function renderItem(id) {
       sold_price: parseFloatOrNull(document.getElementById("e-sold-price").value),
       storage_location: document.getElementById("e-storage-location").value.trim(),
       coop_campaign: document.getElementById("e-coop").checked,
+      is_favorite: document.getElementById("e-favorite").checked,
       notes: document.getElementById("e-notes").value.trim(),
     };
     const { error } = await supabase.from("items").update(payload).eq("id", id);
@@ -1496,7 +1614,7 @@ async function exportCsv() {
     flash("⚠️ Export fehlgeschlagen: " + error.message);
     return;
   }
-  const header = ["Typ", "Titel", "Konsole", "Region", "Kategorie", "Zustand", "Details", "Kaufpreis", "Geschaetzter Wert", "Verkaufsstatus", "Verkaufspreis", "Lagerort", "Koop/Kampagne", "Notizen", "Erstellt"];
+  const header = ["Typ", "Titel", "Konsole", "Region", "Kategorie", "Zustand", "Details", "Kaufpreis", "Geschaetzter Wert", "Verkaufsstatus", "Verkaufspreis", "Lagerort", "Koop/Kampagne", "Favorit", "Notizen", "Erstellt"];
   const rows = items.map((r) => [
     TYPE_LABELS[r.type] || r.type,
     r.title,
@@ -1511,6 +1629,7 @@ async function exportCsv() {
     r.sold_price ?? "",
     r.storage_location || "",
     r.coop_campaign ? "Ja" : "",
+    r.is_favorite ? "Ja" : "",
     r.notes,
     r.created_at,
   ]);

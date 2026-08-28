@@ -83,12 +83,23 @@
       <input type="checkbox" name="coop_only" id="coop-only-filter">
       🎮 Nur Koop/Kampagne
     </label>
+    <label class="coop-filter-toggle">
+      <input type="checkbox" name="favorites_only" id="favorites-only-filter">
+      ⭐ Nur Favoriten
+    </label>
     <select name="sort">
       <option value="created_desc">Neueste zuerst</option>
       <option value="created_asc">Älteste zuerst</option>
       <option value="title_asc">Titel A–Z</option>
+      <option value="title_desc">Titel Z–A</option>
       <option value="value_desc">Wert absteigend</option>
       <option value="value_asc">Wert aufsteigend</option>
+      <option value="purchase_desc">Kaufpreis absteigend</option>
+      <option value="purchase_asc">Kaufpreis aufsteigend</option>
+      <option value="profit_desc">Potentieller Gewinn absteigend</option>
+      <option value="profit_asc">Potentieller Gewinn aufsteigend</option>
+      <option value="margin_desc">Rendite % absteigend</option>
+      <option value="margin_asc">Rendite % aufsteigend</option>
     </select>
     <div class="view-toggle" role="group" aria-label="Ansicht">
       <span class="view-toggle-indicator" id="view-toggle-indicator"></span>
@@ -117,6 +128,7 @@
   </div>
   <div id="list-header" class="list-header hidden">
     <span class="list-check"><input type="checkbox" id="list-select-all" title="Alle auswählen"></span>
+    <span></span>
     <span>Typ</span><span>Titel</span><span>Konsole</span><span>Status</span><span>Kauf</span><span>Wert</span>
   </div>
   <div id="grid" class="grid"></div>
@@ -170,6 +182,7 @@
       <label>Tatsächlicher Verkaufspreis (€)<input type="number" step="0.01" min="0" name="sold_price" id="f-sold-price" placeholder="nur wenn bereits verkauft"></label>
       <label>Lagerort<input type="text" name="storage_location" id="f-storage-location" placeholder="z. B. Regal 2, Kiste B"></label>
       <label class="checkbox-inline"><input type="checkbox" name="coop_campaign" id="f-coop"> 🎮 Koop-/Splitscreen-Kampagne</label>
+      <label class="checkbox-inline"><input type="checkbox" name="is_favorite" id="f-favorite"> ⭐ Favorit</label>
       <label class="full">Notizen<textarea name="notes" id="f-notes" rows="2"></textarea></label>
     </div>
     <div class="form-actions">
@@ -265,6 +278,7 @@
         <label>Tatsächlicher Verkaufspreis (€)<input type="number" step="0.01" min="0" name="sold_price" id="e-sold-price" placeholder="nur wenn bereits verkauft"></label>
         <label>Lagerort<input type="text" name="storage_location" id="e-storage-location" placeholder="z. B. Regal 2, Kiste B"></label>
         <label class="checkbox-inline"><input type="checkbox" name="coop_campaign" id="e-coop"> 🎮 Koop-/Splitscreen-Kampagne</label>
+        <label class="checkbox-inline"><input type="checkbox" name="is_favorite" id="e-favorite"> ⭐ Favorit</label>
         <label class="full">Notizen<textarea name="notes" id="e-notes" rows="2"></textarea></label>
       </div>
       <div id="ai-note" class="ai-note hidden"></div>
