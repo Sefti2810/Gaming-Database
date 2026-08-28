@@ -331,6 +331,28 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
 .storage-group-items a.list-row:first-child { border-radius: 0; border-top: none; }
 .storage-group-items a.list-row:last-child { border-radius: 0 0 var(--radius) var(--radius); }
 
+/* Gewinnrechner auf der Artikel-Detailseite: eigenstaendiges Rechen-Tool,
+   unabhaengig vom Formular - Aenderungen hier werden nicht gespeichert. */
+.calc-box {
+  margin-top: 16px; padding: 14px 16px;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+.calc-box h3 { margin: 0 0 10px; font-size: 1rem; font-family: var(--font-display); }
+.calc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.calc-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--text-muted); }
+.calc-grid input {
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface-2); color: var(--text); font-family: inherit; font-size: 0.95rem;
+}
+.calc-result {
+  display: flex; gap: 24px; margin-top: 12px; padding-top: 10px;
+  border-top: 1px solid var(--border); font-size: 0.95rem;
+}
+.calc-result strong { font-family: var(--font-display); }
+.calc-result .pos { color: var(--pos); }
+.calc-result .neg { color: var(--neg); }
+
 /* Angebotstext-Generator auf der Artikel-Detailseite */
 .listing-box { margin-top: 16px; }
 .listing-output { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
@@ -454,7 +476,29 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
      verschiebt er alle anderen Zellen) und stattdessen oben rechts in die
      Zeile gesetzt. */
   .list-fav { position: absolute; top: 8px; right: 10px; }
+  .sell-row { grid-template-columns: 1fr 1fr; grid-auto-rows: auto; row-gap: 4px; position: relative; }
 }
+
+/* Verkaufen-Bereich: eigene Zeilen-Variante mit Kauf/Wunsch/Gewinn-Spalten
+   statt der Standard-Listenspalten. */
+.sell-list { border-radius: var(--radius); overflow: hidden; }
+.sell-row {
+  display: grid;
+  grid-template-columns: 28px 2fr 1fr 1.2fr 90px 90px 90px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-top: none;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+.sell-row:first-child { border-top: 1px solid var(--border); border-radius: var(--radius) var(--radius) 0 0; }
+.sell-row:last-child { border-radius: 0 0 var(--radius) var(--radius); }
+.sell-row:hover { background: var(--surface-2); }
+.sell-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sell-console { color: var(--text-muted); font-size: 0.85rem; }
 /* Wertblock am Kartenfuss: Marktwert gross/fett als wichtigste Information,
    Kaufpreis und potentieller Gewinn kompakt darunter. */
 .card-value-block { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }

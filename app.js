@@ -85,7 +85,11 @@ function saleStatusInlineHtml(item) {
 // Ansicht erneut aufgerufen. Klicks auf das <select> selbst duerfen NICHT
 // zur Kartennavigation (umschliessendes <a>) fuehren, deshalb stopPropagation
 // direkt am Element (nicht ueber Delegation, die waere hier zu spaet dran).
-function bindInlineStatusSelects(container, items) {
+// onChange ist optional: Standardmaessig wird nach einer Aenderung das
+// Dashboard + die gefilterte Uebersicht neu gezeichnet (Hauptseite). Andere
+// Seiten (z.B. der Verkaufen-Bereich) haben weder #stats noch #filter-form
+// im DOM und uebergeben stattdessen ihre eigene Refresh-Funktion.
+function bindInlineStatusSelects(container, items, onChange) {
   if (!container) return;
   container.querySelectorAll(".sale-status-inline").forEach((sel) => {
     sel.addEventListener("mousedown", (e) => e.stopPropagation());
@@ -108,8 +112,12 @@ function bindInlineStatusSelects(container, items) {
       const item = items.find((i) => i.id === id);
       if (item) item.sale_status = value || null;
       flash("Status aktualisiert.");
-      renderStats(items);
-      applyFiltersAndRender(items);
+      if (onChange) {
+        onChange();
+      } else {
+        renderStats(items);
+        applyFiltersAndRender(items);
+      }
     });
   });
 }
@@ -122,7 +130,8 @@ function favoriteButtonHtml(item) {
   return `<button type="button" class="fav-btn ${fav ? "is-fav" : ""}" data-id="${item.id}" title="${fav ? "Favorit entfernen" : "Als Favorit markieren"}" aria-label="Favorit">${fav ? "⭐" : "☆"}</button>`;
 }
 
-function bindFavoriteButtons(container, items) {
+// onChange optional, siehe Kommentar bei bindInlineStatusSelects.
+function bindFavoriteButtons(container, items, onChange) {
   if (!container) return;
   container.querySelectorAll(".fav-btn").forEach((btn) => {
     btn.addEventListener("mousedown", (e) => e.stopPropagation());
@@ -146,7 +155,8 @@ function bindFavoriteButtons(container, items) {
       btn.title = next ? "Favorit entfernen" : "Als Favorit markieren";
       // Falls der "Nur Favoriten"-Filter aktiv ist, muss der Artikel beim
       // Entfernen sofort aus der Ansicht verschwinden.
-      applyFiltersAndRender(items);
+      if (onChange) onChange();
+      else applyFiltersAndRender(items);
     });
   });
 }
@@ -352,6 +362,8 @@ function router() {
     renderAdd();
   } else if (hash === "#/import") {
     renderImport();
+  } else if (hash === "#/verkaufen") {
+    renderVerkaufen();
   } else if (hash.startsWith("#/item/")) {
     const id = hash.split("/")[2];
     renderItem(id);
@@ -741,36 +753,40 @@ function signedEur(n) {
   return (n >= 0 ? "+" : "") + Number(n).toFixed(2) + " €";
 }
 
-function renderStats(items) {
-  const totalItems = items.length;
-  const totalInvested = items.reduce((s, i) => s + (Number(i.purchase_price) || 0), 0);
-  const totalEstimated = items.reduce((s, i) => s + (Number(i.estimated_value) || 0), 0);
-  const potentialProfit = totalEstimated - totalInvested;
-  const soldItems = items.filter((i) => i.sale_status === "sold");
-  const totalSold = soldItems.reduce((s, i) => s + realizedValue(i), 0);
-  const soldInvested = soldItems.reduce((s, i) => s + (Number(i.purchase_price) || 0), 0);
-  const soldProfit = totalSold - soldInvested;
-  // "highlight" markiert die zwei wichtigsten Kennzahlen (Wert & potentieller
-  // Gewinn) groesser/betonter, die uebrigen bleiben kompakt - das ersetzt die
-  // vorher sechs gleich grossen Karten durch eine klarere Hierarchie.
-  const statCard = (icon, label, value, cls, highlight) => `
+// Erwarteter Verkaufspreis eines Artikels: Wunschpreis, falls gesetzt, sonst
+// der geschätzte Marktwert als Rückfallwert.
+function expectedSalePrice(item) {
+  if (item.asking_price != null) return Number(item.asking_price);
+  if (item.estimated_value != null) return Number(item.estimated_value);
+  return null;
+}
+
+// "highlight" markiert die wichtigsten Kennzahlen groesser/betonter - genutzt
+// vom Dashboard und vom Verkaufen-Bereich.
+function statCardHtml(icon, label, value, cls, highlight) {
+  return `
     <div class="stat-card ${cls || ""} ${highlight ? "highlight" : ""}">
       <div class="stat-icon">${icon}</div>
       <div class="stat-body"><div class="stat-label">${label}</div><div class="stat-value">${value}</div></div>
     </div>`;
+}
+
+function renderStats(items) {
+  const totalItems = items.length;
+  const totalInvested = items.reduce((s, i) => s + (Number(i.purchase_price) || 0), 0);
+  const totalEstimated = items.reduce((s, i) => s + (Number(i.estimated_value) || 0), 0);
+  const totalPotentialProfit = totalEstimated - totalInvested;
+  const soldItems = items.filter((i) => i.sale_status === "sold");
+  const totalSold = soldItems.reduce((s, i) => s + realizedValue(i), 0);
+  const soldInvested = soldItems.reduce((s, i) => s + (Number(i.purchase_price) || 0), 0);
+  const soldProfit = totalSold - soldInvested;
   document.getElementById("stats").innerHTML =
-    statCard("📦", "Artikel gesamt", totalItems) +
-    statCard("💶", "Investiert", totalInvested.toFixed(2) + " €") +
-    statCard("💰", "Geschätzter Wert", totalEstimated.toFixed(2) + " €", "", true) +
-    statCard(
-      "📊",
-      "Potentieller Gewinn",
-      (potentialProfit >= 0 ? "+" : "") + potentialProfit.toFixed(2) + " €",
-      potentialProfit >= 0 ? "pos" : "neg",
-      true
-    ) +
-    statCard("✅", "Verkaufserlöse", totalSold.toFixed(2) + " €") +
-    statCard("📈", "Realisierter Gewinn/Verlust", (soldProfit >= 0 ? "+" : "") + soldProfit.toFixed(2) + " €", soldProfit >= 0 ? "pos" : "neg");
+    statCardHtml("📦", "Artikel gesamt", totalItems) +
+    statCardHtml("💶", "Investiert", eur(totalInvested)) +
+    statCardHtml("💰", "Geschätzter Wert", eur(totalEstimated), "", true) +
+    statCardHtml("📊", "Potentieller Gewinn", signedEur(totalPotentialProfit), totalPotentialProfit >= 0 ? "pos" : "neg", true) +
+    statCardHtml("✅", "Verkaufserlöse", eur(totalSold)) +
+    statCardHtml("📈", "Realisierter Gewinn/Verlust", signedEur(soldProfit), soldProfit >= 0 ? "pos" : "neg");
   renderConsoleBreakdown(items);
 }
 
@@ -1134,6 +1150,73 @@ async function applyFiltersAndRender(items) {
 }
 
 // ---------------------------------------------------------------------
+// Verkaufen-Bereich: zeigt nur Artikel mit Verkaufsstatus "Zum Verkauf
+// vorgesehen" (bestehende Statusfunktion, keine neue parallele Logik) mit
+// einer Zusammenfassung oben. Nutzt den bestehenden Favoriten-/Status-Code.
+// ---------------------------------------------------------------------
+function sellRowHtml(item) {
+  const expected = expectedSalePrice(item);
+  const profit = item.purchase_price != null && expected != null ? expected - Number(item.purchase_price) : null;
+  return `
+      <div class="sell-row">
+        <span class="list-fav">${favoriteButtonHtml(item)}</span>
+        <a class="list-row-link" href="#/item/${item.id}">
+          <span class="sell-title">${escapeHtml(item.title) || "(ohne Titel)"}</span>
+          <span class="sell-console">${escapeHtml(item.console)}</span>
+        </a>
+        <span class="list-status">${saleStatusInlineHtml(item)}</span>
+        <a class="list-row-link" href="#/item/${item.id}">
+          <span class="list-price">Kauf: ${eur(item.purchase_price)}</span>
+          <span class="list-price">${item.asking_price != null ? "Wunsch" : "Wert"}: ${eur(expected)}</span>
+          <span class="list-price ${profit == null ? "" : profit >= 0 ? "pos" : "neg"}">${signedEur(profit)}</span>
+        </a>
+      </div>`;
+}
+
+async function renderVerkaufen() {
+  const main = document.getElementById("main");
+  main.innerHTML = "";
+  main.appendChild(document.getElementById("tpl-verkaufen").content.cloneNode(true));
+  selectedIds.clear();
+
+  const { data: items, error } = await supabase
+    .from("items")
+    .select("*")
+    .eq("sale_status", "for_sale")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    main.innerHTML = `<div class="notice">Fehler beim Laden: ${error.message}</div>`;
+    return;
+  }
+
+  const list = document.getElementById("sell-list");
+  const empty = document.getElementById("sell-empty");
+  const statsBox = document.getElementById("sell-stats");
+
+  if (!items || items.length === 0) {
+    statsBox.innerHTML = "";
+    list.innerHTML = "";
+    empty.classList.remove("hidden");
+    return;
+  }
+  empty.classList.add("hidden");
+
+  const invested = items.reduce((s, i) => s + (Number(i.purchase_price) || 0), 0);
+  const expected = items.reduce((s, i) => s + (expectedSalePrice(i) || 0), 0);
+  const potential = expected - invested;
+  statsBox.innerHTML =
+    statCardHtml("🏷️", "Artikel zum Verkauf", items.length) +
+    statCardHtml("💶", "Einkaufskosten", eur(invested)) +
+    statCardHtml("💰", "Erwarteter Erlös", eur(expected), "", true) +
+    statCardHtml("📊", "Potentieller Gewinn", signedEur(potential), potential >= 0 ? "pos" : "neg", true);
+
+  list.innerHTML = items.map(sellRowHtml).join("");
+  bindInlineStatusSelects(list, items, () => renderVerkaufen());
+  bindFavoriteButtons(list, items, () => renderVerkaufen());
+}
+
+// ---------------------------------------------------------------------
 // Artikel hinzufügen
 // ---------------------------------------------------------------------
 function renderAdd() {
@@ -1224,6 +1307,8 @@ function renderAdd() {
         details: document.getElementById("f-details").value.trim(),
         purchase_price: parseFloatOrNull(document.getElementById("f-purchase").value),
         estimated_value: parseFloatOrNull(document.getElementById("f-estimated").value),
+        asking_price: parseFloatOrNull(document.getElementById("f-asking").value),
+        minimum_price: parseFloatOrNull(document.getElementById("f-minimum").value),
         region: document.getElementById("f-region").value.trim(),
         sale_status: document.getElementById("f-sale-status").value || null,
         sold_price: parseFloatOrNull(document.getElementById("f-sold-price").value),
@@ -1413,6 +1498,8 @@ async function renderItem(id) {
   enhanceCombo(document.getElementById("e-region"), REGION_OPTIONS);
   document.getElementById("e-purchase").value = item.purchase_price ?? "";
   document.getElementById("e-estimated").value = item.estimated_value ?? "";
+  document.getElementById("e-asking").value = item.asking_price ?? "";
+  document.getElementById("e-minimum").value = item.minimum_price ?? "";
   document.getElementById("e-sale-status").value = item.sale_status || "";
   document.getElementById("e-sold-price").value = item.sold_price ?? "";
   document.getElementById("e-storage-location").value = item.storage_location || "";
@@ -1420,6 +1507,7 @@ async function renderItem(id) {
   document.getElementById("e-favorite").checked = !!item.is_favorite;
   document.getElementById("e-notes").value = item.notes || "";
   setupListingGenerator(item);
+  setupProfitCalculator(item);
 
   if (item.ai_price_note) {
     const box = document.getElementById("ai-note");
@@ -1454,6 +1542,8 @@ async function renderItem(id) {
       details: document.getElementById("e-details").value.trim(),
       purchase_price: parseFloatOrNull(document.getElementById("e-purchase").value),
       estimated_value: parseFloatOrNull(document.getElementById("e-estimated").value),
+      asking_price: parseFloatOrNull(document.getElementById("e-asking").value),
+      minimum_price: parseFloatOrNull(document.getElementById("e-minimum").value),
       region: document.getElementById("e-region").value.trim(),
       sale_status: document.getElementById("e-sale-status").value || null,
       sold_price: parseFloatOrNull(document.getElementById("e-sold-price").value),
@@ -1469,6 +1559,7 @@ async function renderItem(id) {
       Object.assign(item, payload);
       flash("Änderungen gespeichert.");
       setupListingGenerator(item);
+      setupProfitCalculator(item);
     }
   });
 
@@ -1512,6 +1603,51 @@ async function renderItem(id) {
 }
 
 // ---------------------------------------------------------------------
+// Gewinnrechner auf der Artikel-Detailseite: eigenstaendiges Rechen-Tool
+// (Kaufpreis/Verkaufspreis -> Gewinn + Rendite %), unabhaengig vom
+// Formular - hier eingegebene Werte werden NICHT gespeichert, es ist reines
+// Durchprobieren. Vorbefuellt mit Kaufpreis und Wunschpreis (bzw. Marktwert
+// als Rueckfall) des Artikels.
+// ---------------------------------------------------------------------
+function setupProfitCalculator(item) {
+  const purchaseInput = document.getElementById("calc-purchase");
+  const saleInput = document.getElementById("calc-sale");
+  const profitOut = document.getElementById("calc-profit");
+  const marginOut = document.getElementById("calc-margin");
+  if (!purchaseInput || !saleInput || !profitOut || !marginOut) return;
+
+  purchaseInput.value = item.purchase_price ?? "";
+  saleInput.value = expectedSalePrice(item) ?? "";
+
+  function recompute() {
+    const p = parseFloat(purchaseInput.value);
+    const s = parseFloat(saleInput.value);
+    if (isNaN(p) || isNaN(s)) {
+      profitOut.textContent = "–";
+      profitOut.className = "";
+      marginOut.textContent = "–";
+      marginOut.className = "";
+      return;
+    }
+    const profit = s - p;
+    const margin = p > 0 ? (profit / p) * 100 : null;
+    profitOut.textContent = signedEur(profit);
+    profitOut.className = profit >= 0 ? "pos" : "neg";
+    marginOut.textContent = margin == null ? "–" : (margin >= 0 ? "+" : "") + margin.toFixed(1) + " %";
+    marginOut.className = margin == null ? "" : margin >= 0 ? "pos" : "neg";
+  }
+
+  // Nur einmal binden (die Eingabefelder bleiben beim Neuaufbau der Seite
+  // erhalten), aber bei jedem Aufruf frisch vorbefuellen und neu berechnen.
+  if (!purchaseInput.dataset.calcBound) {
+    purchaseInput.dataset.calcBound = "1";
+    purchaseInput.addEventListener("input", recompute);
+    saleInput.addEventListener("input", recompute);
+  }
+  recompute();
+}
+
+// ---------------------------------------------------------------------
 // Angebotstext-Generator: fuer Artikel, die zum Verkauf vorgesehen oder
 // reserviert sind, wird auf Knopfdruck ein fertiger Text zum Copy-Pasten
 // (z.B. fuer eBay Kleinanzeigen) erzeugt.
@@ -1524,8 +1660,8 @@ function buildListingText(item) {
   if (item.condition_text) lines.push(`Zustand: ${item.condition_text}`);
   if (item.region) lines.push(`Region: ${item.region}`);
   if (item.details) lines.push(item.details);
-  const price = item.estimated_value != null ? Number(item.estimated_value).toFixed(2) + " €" : null;
-  if (price) lines.push(`Preis: ${price} VB`);
+  const priceValue = expectedSalePrice(item);
+  if (priceValue != null) lines.push(`Preis: ${priceValue.toFixed(2)} € VB`);
   if (item.sale_status === "reserved") lines.push("(Aktuell reserviert)");
   lines.push("Abholung oder Versand (zzgl. Versandkosten) möglich.");
   return lines.join("\n");
@@ -1614,7 +1750,7 @@ async function exportCsv() {
     flash("⚠️ Export fehlgeschlagen: " + error.message);
     return;
   }
-  const header = ["Typ", "Titel", "Konsole", "Region", "Kategorie", "Zustand", "Details", "Kaufpreis", "Geschaetzter Wert", "Verkaufsstatus", "Verkaufspreis", "Lagerort", "Koop/Kampagne", "Favorit", "Notizen", "Erstellt"];
+  const header = ["Typ", "Titel", "Konsole", "Region", "Kategorie", "Zustand", "Details", "Kaufpreis", "Geschaetzter Wert", "Wunschpreis", "Mindestpreis", "Verkaufsstatus", "Verkaufspreis", "Lagerort", "Koop/Kampagne", "Favorit", "Notizen", "Erstellt"];
   const rows = items.map((r) => [
     TYPE_LABELS[r.type] || r.type,
     r.title,
@@ -1625,6 +1761,8 @@ async function exportCsv() {
     r.details,
     r.purchase_price ?? "",
     r.estimated_value ?? "",
+    r.asking_price ?? "",
+    r.minimum_price ?? "",
     (SALE_STATUS[r.sale_status] && SALE_STATUS[r.sale_status].label) || "",
     r.sold_price ?? "",
     r.storage_location || "",

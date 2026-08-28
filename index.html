@@ -46,6 +46,7 @@
     <a class="brand" href="#/">🎮 Sammlung-Tracker</a>
     <nav>
       <a href="#/">Übersicht</a>
+      <a href="#/verkaufen">🏷️ Verkaufen</a>
       <a href="#/add" class="btn-primary-nav">+ Artikel</a>
       <a href="#/import">Import</a>
       <button id="export-btn" class="link-btn">Export</button>
@@ -136,6 +137,17 @@
   <div id="empty-state" class="empty-state hidden"></div>
 </template>
 
+<template id="tpl-verkaufen">
+  <h1>🏷️ Verkaufen</h1>
+  <section class="stats" id="sell-stats"></section>
+  <div id="sell-list" class="sell-list"></div>
+  <div id="sell-empty" class="empty-state hidden">
+    <div class="empty-state-icon">🏷️</div>
+    <p>Aktuell ist kein Artikel zum Verkauf vorgesehen.</p>
+    <p class="empty-sub">Setze bei einem Artikel den Verkaufsstatus auf „Zum Verkauf vorgesehen“, damit er hier erscheint.</p>
+  </div>
+</template>
+
 <template id="tpl-add">
   <h1>Neuen Artikel hinzufügen</h1>
   <div id="no-key-notice" class="notice hidden">
@@ -168,7 +180,9 @@
       <label>Zustand<input type="text" name="condition" id="f-condition" placeholder="z. B. OVP, wie neu"></label>
       <label class="full">Details<textarea name="details" id="f-details" rows="2" placeholder="Region, Edition, Bundle-Inhalt, Besonderheiten…"></textarea></label>
       <label>Kaufpreis (€)<input type="number" step="0.01" min="0" name="purchase_price" id="f-purchase"></label>
-      <label>Geschätzter Verkaufswert (€)<input type="number" step="0.01" min="0" name="estimated_value" id="f-estimated"></label>
+      <label>Geschätzter Marktwert (€)<input type="number" step="0.01" min="0" name="estimated_value" id="f-estimated"></label>
+      <label>Wunschpreis (€)<input type="number" step="0.01" min="0" name="asking_price" id="f-asking" placeholder="für welchen Preis anbieten?"></label>
+      <label>Mindestpreis (€)<input type="number" step="0.01" min="0" name="minimum_price" id="f-minimum" placeholder="nicht darunter verkaufen"></label>
       <label>Region / Sprache<input type="text" name="region" id="f-region" placeholder="z. B. PAL (DE)"></label>
       <label>Verkaufsstatus
         <select name="sale_status" id="f-sale-status">
@@ -264,7 +278,9 @@
         <label>Zustand<input type="text" name="condition" id="e-condition"></label>
         <label class="full">Details<textarea name="details" id="e-details" rows="2"></textarea></label>
         <label>Kaufpreis (€)<input type="number" step="0.01" min="0" name="purchase_price" id="e-purchase"></label>
-        <label>Geschätzter Verkaufswert (€)<input type="number" step="0.01" min="0" name="estimated_value" id="e-estimated"></label>
+        <label>Geschätzter Marktwert (€)<input type="number" step="0.01" min="0" name="estimated_value" id="e-estimated"></label>
+        <label>Wunschpreis (€)<input type="number" step="0.01" min="0" name="asking_price" id="e-asking" placeholder="für welchen Preis anbieten?"></label>
+        <label>Mindestpreis (€)<input type="number" step="0.01" min="0" name="minimum_price" id="e-minimum" placeholder="nicht darunter verkaufen"></label>
         <label>Region / Sprache<input type="text" name="region" id="e-region" placeholder="z. B. PAL (DE)"></label>
         <label>Verkaufsstatus
           <select name="sale_status" id="e-sale-status">
@@ -288,6 +304,17 @@
       </div>
       <div id="estimate-status" class="status-text"></div>
     </form>
+    <div id="calc-box" class="calc-box">
+      <h3>💰 Gewinnrechner</h3>
+      <div class="calc-grid">
+        <label>Kaufpreis (€)<input type="number" step="0.01" min="0" id="calc-purchase"></label>
+        <label>Verkaufspreis (€)<input type="number" step="0.01" min="0" id="calc-sale"></label>
+      </div>
+      <div class="calc-result">
+        <span>Gewinn: <strong id="calc-profit">–</strong></span>
+        <span>Rendite: <strong id="calc-margin">–</strong></span>
+      </div>
+    </div>
     <div id="listing-box" class="listing-box hidden">
       <button type="button" id="listing-btn" class="btn-secondary">📋 Angebotstext erstellen</button>
       <div id="listing-output" class="listing-output hidden">
