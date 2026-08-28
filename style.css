@@ -334,7 +334,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
 .view-toggle-indicator {
   position: absolute;
   top: 3px; bottom: 3px; left: 3px;
-  width: calc((100% - 6px) / 3);
+  width: calc((100% - 6px) / 4);
   background: var(--accent);
   border-radius: 7px;
   box-shadow: var(--shadow-sm);
@@ -347,6 +347,11 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
   padding: 8px 10px; font-size: 0.85rem; cursor: pointer; font-family: inherit;
   border-radius: 7px; white-space: nowrap;
   transition: color .2s ease;
+}
+/* Bei vier Ansichts-Buttons wird es auf schmalen Handys eng - Beschriftung
+   dort etwas kompakter darstellen, damit nichts umbricht oder überläuft. */
+@media (max-width: 480px) {
+  .view-btn { padding: 7px 5px; font-size: 0.68rem; }
 }
 .view-btn.active { color: #fff; }
 
@@ -414,6 +419,37 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
   gap: 16px;
 }
 .grid.list { display: flex; flex-direction: column; gap: 0; }
+/* Würfelansicht: immer zwei kompakte Kacheln nebeneinander, auch auf dem
+   Handy - angelehnt an Produktraster wie z.B. bei Zalando. */
+.grid.cube { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.cube-card {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow .15s ease, transform .15s ease;
+}
+.cube-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.cube-card-link { display: contents; color: inherit; text-decoration: none; cursor: pointer; }
+.cube-card-photo { position: relative; aspect-ratio: 1/1; background: var(--photo-bg); }
+.cube-card-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cube-card-photo .no-photo { font-size: 1.6rem; }
+.cube-card-body { padding: 8px 10px 10px; }
+.cube-card-title {
+  font-weight: 600; font-size: 0.82rem; font-family: var(--font-display);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 1px;
+}
+.cube-card-console { font-size: 0.72rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cube-card-price { font-size: 0.85rem; font-weight: 700; font-family: var(--font-display); margin-top: 4px; }
+.cube-card .fav-btn {
+  position: absolute; top: 6px; right: 6px; z-index: 2;
+  background: rgba(0,0,0,0.55); border-radius: 50%;
+  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  font-size: 0.9rem;
+}
+.cube-card .fav-btn:not(.is-fav) { color: #fff; }
 .card {
   position: relative;
   background: var(--card);

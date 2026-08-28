@@ -336,7 +336,7 @@ const VIEW_KEY = "sammlung-view";
 let currentView = "grid";
 try {
   const savedView = localStorage.getItem(VIEW_KEY);
-  currentView = savedView === "list" || savedView === "storage" ? savedView : "grid";
+  currentView = savedView === "list" || savedView === "storage" || savedView === "cube" ? savedView : "grid";
 } catch (_) {
   // localStorage evtl. nicht verfuegbar - Standardansicht (Karten) nutzen.
 }
@@ -618,6 +618,7 @@ async function renderIndex() {
   document.getElementById("view-grid-btn").addEventListener("click", () => setView("grid", items));
   document.getElementById("view-list-btn").addEventListener("click", () => setView("list", items));
   document.getElementById("view-storage-btn").addEventListener("click", () => setView("storage", items));
+  document.getElementById("view-cube-btn").addEventListener("click", () => setView("cube", items));
   setupBulkToolbar(items);
   ensureBulkCheckboxHandler();
 }
@@ -660,6 +661,7 @@ function updateViewButtons() {
   const gridBtn = document.getElementById("view-grid-btn");
   const listBtn = document.getElementById("view-list-btn");
   const storageBtn = document.getElementById("view-storage-btn");
+  const cubeBtn = document.getElementById("view-cube-btn");
   const listHeader = document.getElementById("list-header");
   const grid = document.getElementById("grid");
   const storageView = document.getElementById("storage-view");
@@ -667,14 +669,16 @@ function updateViewButtons() {
   gridBtn.classList.toggle("active", currentView === "grid");
   listBtn.classList.toggle("active", currentView === "list");
   if (storageBtn) storageBtn.classList.toggle("active", currentView === "storage");
+  if (cubeBtn) cubeBtn.classList.toggle("active", currentView === "cube");
   const indicator = document.getElementById("view-toggle-indicator");
   if (indicator) {
-    const idx = { grid: 0, list: 1, storage: 2 }[currentView] ?? 0;
+    const idx = { grid: 0, list: 1, storage: 2, cube: 3 }[currentView] ?? 0;
     indicator.style.transform = `translateX(${idx * 100}%)`;
   }
   if (listHeader) listHeader.classList.toggle("hidden", currentView !== "list");
   if (grid) {
     grid.classList.toggle("list", currentView === "list");
+    grid.classList.toggle("cube", currentView === "cube");
     grid.classList.toggle("hidden", currentView === "storage");
   }
   if (storageView) storageView.classList.toggle("hidden", currentView !== "storage");
@@ -1254,6 +1258,36 @@ async function applyFiltersAndRender(items) {
     grid.innerHTML = filtered.map(listRowHtml).join("");
     updateBulkToolbar();
     bindInlineStatusSelects(grid, items);
+    bindFavoriteButtons(grid, items);
+    fadeInEl(grid);
+    return;
+  }
+
+  if (currentView === "cube") {
+    // Würfelansicht: kompakte Kacheln, immer zwei nebeneinander (auch auf dem
+    // Handy) - so wie in typischen Produktraster-Ansichten, z.B. bei Zalando.
+    const cubePhotoPaths = filtered.map((i) => i.photos?.[0]).filter(Boolean);
+    const cubeUrlMap = await getSignedUrlMap(cubePhotoPaths);
+    grid.innerHTML = filtered
+      .map((item) => {
+        const photoUrl = item.photos?.[0] ? cubeUrlMap[item.photos[0]] : null;
+        const photoHtml = photoUrl
+          ? `<img src="${photoUrl}" alt="${escapeHtml(item.title)}">`
+          : `<div class="no-photo">🎮</div>`;
+        return `
+        <div class="cube-card">
+          ${favoriteButtonHtml(item)}
+          <a class="cube-card-link" href="#/item/${item.id}">
+            <div class="cube-card-photo">${photoHtml}</div>
+            <div class="cube-card-body">
+              <div class="cube-card-title">${escapeHtml(item.title) || "(ohne Titel)"}</div>
+              <div class="cube-card-console">${escapeHtml(item.console)}</div>
+              <div class="cube-card-price">${eur(item.estimated_value)}</div>
+            </div>
+          </a>
+        </div>`;
+      })
+      .join("");
     bindFavoriteButtons(grid, items);
     fadeInEl(grid);
     return;
