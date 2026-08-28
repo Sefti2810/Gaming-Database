@@ -210,6 +210,14 @@
       </label>
       <button type="button" id="analyze-btn" class="btn-secondary" disabled>🤖 Mit KI erkennen</button>
       <div id="analyze-status" class="status-text"></div>
+      <div id="analyze-result" class="ai-review hidden">
+        <h4>🔍 Erkannte Daten</h4>
+        <div id="analyze-result-body" class="ai-review-body"></div>
+        <div class="ai-review-actions">
+          <button type="button" id="analyze-apply" class="btn-secondary small">✅ Übernehmen</button>
+          <button type="button" id="analyze-discard" class="btn-link">Verwerfen</button>
+        </div>
+      </div>
     </div>
     <div class="field-grid">
       <label>Typ
@@ -350,6 +358,13 @@
         <button type="button" id="estimate-btn" class="btn-secondary">🤖 Preis mit KI schätzen</button>
       </div>
       <div id="estimate-status" class="status-text"></div>
+      <div id="estimate-result" class="ai-review hidden">
+        <div id="estimate-result-body" class="ai-review-body"></div>
+        <div class="ai-review-actions">
+          <button type="button" id="estimate-apply" class="btn-secondary small">✅ Übernehmen</button>
+          <button type="button" id="estimate-discard" class="btn-link">Verwerfen</button>
+        </div>
+      </div>
     </form>
     <div id="calc-box" class="calc-box">
       <h3>💰 Gewinnrechner</h3>

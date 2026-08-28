@@ -354,8 +354,20 @@ let selectedIds = new Set();
 // ---------------------------------------------------------------------
 window.addEventListener("hashchange", router);
 
+// Hebt den aktiven Menüpunkt in der Kopfzeile hervor - rein optisch, ohne
+// Auswirkung auf die eigentliche Navigation/Routing-Logik.
+function updateNavActive() {
+  const hash = location.hash || "#/";
+  document.querySelectorAll(".topbar nav a").forEach((a) => {
+    const href = a.getAttribute("href");
+    const isActive = href === "#/" ? hash === "#/" || hash === "" || hash.startsWith("#/item/") : hash === href;
+    a.classList.toggle("nav-active", isActive);
+  });
+}
+
 function router() {
   const hash = location.hash || "#/";
+  updateNavActive();
   if (hash === "#/" || hash === "") {
     renderIndex();
   } else if (hash === "#/add") {
@@ -1471,25 +1483,66 @@ function renderAdd() {
     analyzeBtn.disabled = selectedFiles.length === 0;
   });
 
+  // Die KI-Fotoerkennung füllt die Formularfelder NICHT mehr direkt aus,
+  // sondern zeigt zunächst eine Kontrollbox mit den erkannten Daten an - erst
+  // ein Klick auf "Übernehmen" trägt sie ins Formular ein.
+  let lastRecognition = null;
+  const analyzeResultBox = document.getElementById("analyze-result");
+  const analyzeResultBody = document.getElementById("analyze-result-body");
+
+  function renderAnalyzeResult(s) {
+    const rows = [
+      ["Typ", TYPE_LABELS[s.type] || s.type],
+      ["Titel", s.title],
+      ["Konsole", s.console],
+      ["Genre", s.category],
+      ["Zustand", s.condition],
+      ["Details", s.details],
+    ].filter(([, v]) => v);
+    if (rows.length === 0) {
+      analyzeResultBox.classList.add("hidden");
+      return;
+    }
+    analyzeResultBody.innerHTML = rows
+      .map(([label, v]) => `<div class="ai-review-row"><span class="ai-review-label">${label}</span><span class="ai-review-value">${escapeHtml(String(v))}</span></div>`)
+      .join("");
+    analyzeResultBox.classList.remove("hidden");
+  }
+
   analyzeBtn.addEventListener("click", async () => {
     if (selectedFiles.length === 0) return;
     analyzeBtn.disabled = true;
     analyzeStatus.textContent = "Analysiere Foto…";
+    analyzeResultBox.classList.add("hidden");
     try {
       const dataUrl = await fileToDataUrl(selectedFiles[0]);
       const data = await invokeAnalyzeFn({ action: "recognize", image: dataUrl });
-      const s = data.suggestion || {};
-      if (s.type) document.getElementById("f-type").value = s.type;
-      if (s.title) document.getElementById("f-title").value = s.title;
-      if (s.console) consoleCombo.setValue(s.console);
-      if (s.category) categoryCombo.setValue(s.category);
-      if (s.condition) conditionCombo.setValue(s.condition);
-      if (s.details) document.getElementById("f-details").value = s.details;
-      analyzeStatus.textContent = `✅ Vorschlag übernommen (Konfidenz: ${s.confidence || "unbekannt"}). Bitte prüfen und ggf. korrigieren.`;
+      lastRecognition = data.suggestion || {};
+      renderAnalyzeResult(lastRecognition);
+      analyzeStatus.textContent = `Vorschlag erkannt (Konfidenz: ${lastRecognition.confidence || "unbekannt"}). Bitte prüfen und ggf. übernehmen.`;
     } catch (err) {
       analyzeStatus.textContent = "⚠️ Fehler bei der Analyse: " + (err.message || err);
     }
     analyzeBtn.disabled = false;
+  });
+
+  document.getElementById("analyze-apply").addEventListener("click", () => {
+    const s = lastRecognition;
+    if (!s) return;
+    if (s.type) document.getElementById("f-type").value = s.type;
+    if (s.title) document.getElementById("f-title").value = s.title;
+    if (s.console) consoleCombo.setValue(s.console);
+    if (s.category) categoryCombo.setValue(s.category);
+    if (s.condition) conditionCombo.setValue(s.condition);
+    if (s.details) document.getElementById("f-details").value = s.details;
+    analyzeResultBox.classList.add("hidden");
+    analyzeStatus.textContent = "✅ Vorschlag übernommen.";
+  });
+
+  document.getElementById("analyze-discard").addEventListener("click", () => {
+    lastRecognition = null;
+    analyzeResultBox.classList.add("hidden");
+    analyzeStatus.textContent = "";
   });
 
   document.getElementById("item-form").addEventListener("submit", async (e) => {
@@ -1786,9 +1839,17 @@ async function renderItem(id) {
     }
   });
 
+  // Die KI-Preisschätzung schreibt NICHT mehr direkt in die Datenbank, sondern
+  // zeigt das Ergebnis zunächst zur Kontrolle an - erst "Übernehmen" trägt den
+  // Wert ins Formular ein und speichert ihn.
+  let lastPriceEstimate = null;
+  const estimateResultBox = document.getElementById("estimate-result");
+  const estimateResultBody = document.getElementById("estimate-result-body");
+
   document.getElementById("estimate-btn").addEventListener("click", async () => {
     const status = document.getElementById("estimate-status");
     status.textContent = "Schätze Preis…";
+    estimateResultBox.classList.add("hidden");
     try {
       const data = await invokeAnalyzeFn({
         action: "price",
@@ -1800,12 +1861,44 @@ async function renderItem(id) {
           details: document.getElementById("e-details").value,
         },
       });
-      document.getElementById("e-estimated").value = data.mid ?? "";
-      status.textContent = `Geschätzt: ${data.estimated_low}–${data.estimated_high} € — ${data.note || ""}`;
-      await supabase.from("items").update({ estimated_value: data.mid, ai_price_note: data.note || "" }).eq("id", id);
+      lastPriceEstimate = data;
+      estimateResultBody.innerHTML = `
+        <div class="ai-review-row"><span class="ai-review-label">Spanne</span><span class="ai-review-value">${eur(data.estimated_low)} – ${eur(data.estimated_high)}</span></div>
+        <div class="ai-review-row"><span class="ai-review-label">Mittelwert</span><span class="ai-review-value">${eur(data.mid)}</span></div>
+        ${data.note ? `<div class="ai-review-row"><span class="ai-review-label">Hinweis</span><span class="ai-review-value">${escapeHtml(data.note)}</span></div>` : ""}`;
+      estimateResultBox.classList.remove("hidden");
+      status.textContent = "Vorschlag erhalten. Bitte prüfen und ggf. übernehmen.";
     } catch (err) {
       status.textContent = "⚠️ Fehler bei der Preisschätzung: " + (err.message || err);
     }
+  });
+
+  document.getElementById("estimate-apply").addEventListener("click", async () => {
+    const data = lastPriceEstimate;
+    if (!data) return;
+    const status = document.getElementById("estimate-status");
+    document.getElementById("e-estimated").value = data.mid ?? "";
+    const { error } = await supabase.from("items").update({ estimated_value: data.mid, ai_price_note: data.note || "" }).eq("id", id);
+    if (error) {
+      status.textContent = "⚠️ Fehler beim Speichern: " + error.message;
+      return;
+    }
+    item.estimated_value = data.mid;
+    item.ai_price_note = data.note || "";
+    if (data.note) {
+      const box = document.getElementById("ai-note");
+      box.textContent = "🤖 KI-Einschätzung: " + data.note;
+      box.classList.remove("hidden");
+    }
+    setupProfitCalculator(item);
+    estimateResultBox.classList.add("hidden");
+    status.textContent = `✅ Übernommen: ${eur(data.mid)}`;
+  });
+
+  document.getElementById("estimate-discard").addEventListener("click", () => {
+    lastPriceEstimate = null;
+    estimateResultBox.classList.add("hidden");
+    document.getElementById("estimate-status").textContent = "";
   });
 
   document.getElementById("delete-form").addEventListener("submit", async (e) => {
