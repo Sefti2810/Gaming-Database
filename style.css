@@ -129,15 +129,26 @@ a:hover { text-decoration: underline; }
 
 main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
 
+/* Schwebender Toast statt fixer Leiste: erscheint unten mittig, blendet sanft
+   ein/aus und verschiebt dabei nie den restlichen Seiteninhalt. */
 .flash {
-  max-width: 1100px;
-  margin: 12px auto 0;
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 500;
+  max-width: min(420px, calc(100vw - 32px));
   background: var(--flash-bg);
   border: 1px solid var(--flash-border);
   color: var(--flash-text);
   padding: 10px 16px;
   border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 12px);
+  transition: opacity .25s ease, transform .25s ease;
 }
+.flash.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
 
 .notice {
   background: var(--notice-bg);
@@ -255,14 +266,32 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
   background: var(--surface-2); color: var(--text-muted); border-radius: 6px; padding: 2px 6px;
 }
 
-.view-toggle { display: flex; gap: 0; margin-left: auto; }
-.view-btn {
-  border: 1px solid var(--border); background: var(--card); color: var(--text-muted);
-  padding: 8px 12px; font-size: 0.85rem; cursor: pointer; font-family: inherit;
+.view-toggle {
+  position: relative;
+  display: flex; gap: 0; margin-left: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 3px;
 }
-.view-btn:first-child { border-radius: 8px 0 0 8px; }
-.view-btn:last-child { border-radius: 0 8px 8px 0; border-left: none; }
-.view-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.view-toggle-indicator {
+  position: absolute;
+  top: 3px; bottom: 3px; left: 3px;
+  width: calc((100% - 6px) / 3);
+  background: var(--accent);
+  border-radius: 7px;
+  box-shadow: var(--shadow-sm);
+  transition: transform .2s ease;
+  z-index: 0;
+}
+.view-btn {
+  position: relative; z-index: 1; flex: 1;
+  border: none; background: transparent; color: var(--text-muted);
+  padding: 8px 10px; font-size: 0.85rem; cursor: pointer; font-family: inherit;
+  border-radius: 7px; white-space: nowrap;
+  transition: color .2s ease;
+}
+.view-btn.active { color: #fff; }
 
 /* Bulk-Bearbeitung: Symbolleiste, die auftaucht, sobald in der Listenansicht
    mindestens ein Artikel ausgewaehlt ist. */
@@ -318,6 +347,12 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
   transition: box-shadow .15s ease, transform .15s ease;
 }
 .card:hover { box-shadow: var(--shadow-md); text-decoration: none; transform: translateY(-3px); }
+/* .card-link ist der eigentliche Link zum Artikel; "display:contents" macht ihn
+   im Grid/Layout unsichtbar, sodass card-photo/card-body-top optisch direkt in
+   .card sitzen. Der Status-Select in .card-sale liegt als echtes Geschwister
+   dazwischen, also NIE innerhalb eines <a> - das verhindert das Navigations-
+   Problem beim Antippen auf dem Handy/in der installierten App zuverlässig. */
+.card-link { display: contents; color: inherit; text-decoration: none; cursor: pointer; }
 .card-photo { position: relative; aspect-ratio: 4/3; background: var(--photo-bg); }
 .card-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .no-photo { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 2.2rem; color: var(--text-muted); }
@@ -327,11 +362,12 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
   background: rgba(0,0,0,0.65); color: #fff;
   font-size: 0.7rem; padding: 3px 8px; border-radius: 20px;
 }
-.card-body { padding: 12px 14px; }
+.card-body-top { padding: 12px 14px 0; }
+.card-body-bottom { padding: 0 14px 12px; }
 .card-title { font-weight: 600; margin-bottom: 2px; font-family: var(--font-display); }
 .card-console { font-size: 0.85rem; color: var(--text-muted); }
 .card-category { font-size: 0.8rem; color: var(--accent-dark); margin-top: 2px; }
-.card-sale { margin-top: 6px; }
+.card-sale { margin-top: 6px; padding: 0 14px; }
 
 /* Verkaufsstatus-Vermerk (Badge auf Karte/Liste sowie im Formular) */
 .sale-badge {
@@ -406,6 +442,42 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
 .card-prices { display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.85rem; color: var(--text-muted); }
 
 .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+.empty-state-icon { font-size: 3rem; margin-bottom: 10px; opacity: 0.7; }
+.empty-state p { margin: 0 0 4px; font-size: 1.05rem; color: var(--text); }
+.empty-state p.empty-sub { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 16px; }
+.empty-state .btn-secondary { margin-top: 4px; }
+
+/* Aktive Filter als entfernbare Chips über der Liste. */
+.filter-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
+.filter-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text); font-size: 0.8rem;
+  padding: 5px 8px 5px 12px; border-radius: 20px;
+}
+.filter-chip button {
+  border: none; background: none; cursor: pointer; color: var(--text-muted);
+  font-size: 0.9rem; line-height: 1; padding: 2px; border-radius: 50%;
+}
+.filter-chip button:hover { background: var(--border); color: var(--text); }
+
+/* Skeleton-Platzhalter, solange die Artikel geladen werden. */
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.skeleton-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm);
+}
+.skeleton-photo, .skeleton-line {
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 37%, var(--surface-2) 63%);
+  background-size: 300% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+}
+.skeleton-photo { aspect-ratio: 4/3; }
+.skeleton-line { height: 12px; border-radius: 4px; margin: 12px 14px; }
+.skeleton-line.short { width: 55%; }
 .btn-primary {
   display: inline-block;
   background: var(--accent); color: #fff;

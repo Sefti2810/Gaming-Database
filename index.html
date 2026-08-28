@@ -91,11 +91,13 @@
       <option value="value_asc">Wert aufsteigend</option>
     </select>
     <div class="view-toggle" role="group" aria-label="Ansicht">
+      <span class="view-toggle-indicator" id="view-toggle-indicator"></span>
       <button type="button" id="view-grid-btn" class="view-btn" title="Kartenansicht (mit Fotos)">🔲 Karten</button>
       <button type="button" id="view-list-btn" class="view-btn" title="Listenansicht (schneller Überblick, ohne Fotos)">📋 Liste</button>
       <button type="button" id="view-storage-btn" class="view-btn" title="Nach Lagerort gruppiert">🗄️ Lagerort</button>
     </div>
   </form>
+  <div id="filter-chips" class="filter-chips hidden"></div>
   <div id="bulk-toolbar" class="bulk-toolbar hidden">
     <span id="bulk-count" class="status-text"></span>
     <select id="bulk-sale-status">
@@ -119,10 +121,7 @@
   </div>
   <div id="grid" class="grid"></div>
   <div id="storage-view" class="storage-view hidden"></div>
-  <div id="empty-state" class="empty-state hidden">
-    <p>Noch keine Artikel erfasst.</p>
-    <a class="btn-primary" href="#/add">Ersten Artikel hinzufügen</a>
-  </div>
+  <div id="empty-state" class="empty-state hidden"></div>
 </template>
 
 <template id="tpl-add">

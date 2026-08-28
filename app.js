@@ -323,11 +323,22 @@ function router() {
   }
 }
 
+let flashHideTimer = null;
+let flashRemoveTimer = null;
 function flash(msg) {
   const box = document.getElementById("flash");
+  clearTimeout(flashHideTimer);
+  clearTimeout(flashRemoveTimer);
   box.textContent = msg;
   box.classList.remove("hidden");
-  setTimeout(() => box.classList.add("hidden"), 4000);
+  // Reflow erzwingen, damit die Einblend-Transition auch dann greift, wenn
+  // kurz hintereinander mehrere Meldungen kommen.
+  void box.offsetWidth;
+  box.classList.add("show");
+  flashHideTimer = setTimeout(() => {
+    box.classList.remove("show");
+    flashRemoveTimer = setTimeout(() => box.classList.add("hidden"), 250);
+  }, 3500);
 }
 
 // ---------------------------------------------------------------------
@@ -499,10 +510,27 @@ function populateFilters(items) {
   ]);
 }
 
+function skeletonGridHtml(count = 8) {
+  return Array.from({ length: count })
+    .map(
+      () => `
+      <div class="skeleton-card">
+        <div class="skeleton-photo"></div>
+        <div class="skeleton-line" style="width:70%"></div>
+        <div class="skeleton-line short"></div>
+      </div>`
+    )
+    .join("");
+}
+
 async function renderIndex() {
   const main = document.getElementById("main");
   main.innerHTML = "";
   main.appendChild(document.getElementById("tpl-index").content.cloneNode(true));
+
+  // Sofort Platzhalter zeigen, statt bis zum Laden der Daten eine leere Fläche.
+  const skeletonGrid = document.getElementById("grid");
+  if (skeletonGrid) skeletonGrid.innerHTML = skeletonGridHtml();
 
   const { data: items, error } = await supabase
     .from("items")
@@ -555,6 +583,11 @@ function updateViewButtons() {
   gridBtn.classList.toggle("active", currentView === "grid");
   listBtn.classList.toggle("active", currentView === "list");
   if (storageBtn) storageBtn.classList.toggle("active", currentView === "storage");
+  const indicator = document.getElementById("view-toggle-indicator");
+  if (indicator) {
+    const idx = { grid: 0, list: 1, storage: 2 }[currentView] ?? 0;
+    indicator.style.transform = `translateX(${idx * 100}%)`;
+  }
   if (listHeader) listHeader.classList.toggle("hidden", currentView !== "list");
   if (grid) {
     grid.classList.toggle("list", currentView === "list");
@@ -717,8 +750,10 @@ function renderConsoleBreakdown(items) {
 }
 
 // Eine Zeile der Listenansicht (auch von der Lagerort-Ansicht wiederverwendet).
-// Die Checkbox liegt bewusst AUSSERHALB des <a>, damit ein Klick darauf nicht
-// gleichzeitig zum Artikel navigiert.
+// Checkbox UND Status-Select liegen bewusst AUSSERHALB der <a>-Verlinkung
+// (als Geschwister zwischen zwei "display:contents"-Links), damit ein Klick/Tipp
+// darauf nicht gleichzeitig zum Artikel navigiert - auf dem Handy/als installierte
+// App reicht ein reines stopPropagation() im Select dafür nicht zuverlässig aus.
 function listRowHtml(item) {
   const checked = selectedIds.has(item.id) ? "checked" : "";
   return `
@@ -728,7 +763,9 @@ function listRowHtml(item) {
           <span class="badge-inline badge-${item.type}">${TYPE_LABELS[item.type] || item.type}</span>
           <span class="list-title">${escapeHtml(item.title) || "(ohne Titel)"}${item.coop_campaign ? ' <span class="coop-badge">🎮 Koop</span>' : ""}</span>
           <span class="list-console">${escapeHtml(item.console)}</span>
-          <span class="list-status">${saleStatusInlineHtml(item)}</span>
+        </a>
+        <span class="list-status">${saleStatusInlineHtml(item)}</span>
+        <a class="list-row-link" href="#/item/${item.id}">
           <span class="list-price">${item.purchase_price != null ? Number(item.purchase_price).toFixed(2) + " €" : "–"}</span>
           <span class="list-price">${item.estimated_value != null ? Number(item.estimated_value).toFixed(2) + " €" : "–"}</span>
         </a>
@@ -766,6 +803,72 @@ function renderStorageView(filtered) {
     .join("");
 }
 
+// Zeigt aktive Filter als entfernbare Chips über der Liste an, damit man auf
+// einen Blick sieht, was gerade eingeschränkt ist, und es einzeln wieder
+// aufheben kann, ohne das ganze Filter-Menü zu öffnen.
+function renderFilterChips({ q, types, allTypeCount, consoles, allConsoleCount, saleStatuses, allSaleStatusCount, coopOnly }) {
+  const box = document.getElementById("filter-chips");
+  if (!box) return;
+  const chips = [];
+
+  if (q) {
+    chips.push({
+      label: `Suche: "${q}"`,
+      clear: () => {
+        const input = document.querySelector('#filter-form [name="q"]');
+        if (input) input.value = "";
+      },
+    });
+  }
+  if (types.length < allTypeCount) {
+    const labels = types.map((t) => TYPE_LABELS[t] || t).join(", ") || "keine";
+    chips.push({
+      label: `Typ: ${labels}`,
+      clear: () => document.querySelectorAll('#filter-form input[name="type"]').forEach((b) => (b.checked = true)),
+    });
+  }
+  if (consoles.length < allConsoleCount) {
+    const label = consoles.length > 0 && consoles.length <= 3 ? consoles.join(", ") : `${consoles.length} ausgewählt`;
+    chips.push({
+      label: `Konsole: ${label}`,
+      clear: () => document.querySelectorAll('#filter-form input[name="console"]').forEach((b) => (b.checked = true)),
+    });
+  }
+  if (saleStatuses.length < allSaleStatusCount) {
+    const labels = saleStatuses.map((s) => (s === "" ? "kein Vermerk" : SALE_STATUS[s]?.label || s)).join(", ") || "keine";
+    chips.push({
+      label: `Status: ${labels}`,
+      clear: () => document.querySelectorAll('#filter-form input[name="sale_status"]').forEach((b) => (b.checked = true)),
+    });
+  }
+  if (coopOnly) {
+    chips.push({
+      label: "🎮 Nur Koop/Kampagne",
+      clear: () => {
+        const cb = document.getElementById("coop-only-filter");
+        if (cb) cb.checked = false;
+      },
+    });
+  }
+
+  if (chips.length === 0) {
+    box.classList.add("hidden");
+    box.innerHTML = "";
+    return;
+  }
+  box.classList.remove("hidden");
+  box.innerHTML = chips
+    .map((c, i) => `<span class="filter-chip" data-idx="${i}">${escapeHtml(c.label)}<button type="button" aria-label="Filter entfernen">✕</button></span>`)
+    .join("");
+  box.querySelectorAll(".filter-chip button").forEach((btn, i) => {
+    btn.addEventListener("click", () => {
+      chips[i].clear();
+      updateAllMsCounts();
+      document.getElementById("filter-form").dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  });
+}
+
 async function applyFiltersAndRender(items) {
   const form = document.getElementById("filter-form");
   const fd = new FormData(form);
@@ -787,6 +890,10 @@ async function applyFiltersAndRender(items) {
     saleStatuses,
     coopOnly,
   };
+
+  renderFilterChips({ q, types, allTypeCount, consoles, allConsoleCount, saleStatuses, allSaleStatusCount, coopOnly });
+  const hasActiveFilter =
+    !!q || types.length < allTypeCount || consoles.length < allConsoleCount || saleStatuses.length < allSaleStatusCount || coopOnly;
 
   let filtered = items.filter((i) => {
     if (types.length < allTypeCount && !types.includes(i.type || "")) return false;
@@ -819,11 +926,35 @@ async function applyFiltersAndRender(items) {
   if (filtered.length === 0) {
     grid.innerHTML = "";
     if (storageContainer) storageContainer.innerHTML = "";
-    empty.classList.remove("hidden");
+    if (empty) {
+      empty.innerHTML =
+        items.length === 0
+          ? `<div class="empty-state-icon">🎮</div>
+             <p>Noch keine Artikel erfasst.</p>
+             <a class="btn-primary" href="#/add">Ersten Artikel hinzufügen</a>`
+          : `<div class="empty-state-icon">🔍</div>
+             <p>Keine Artikel gefunden.</p>
+             <p class="empty-sub">Passe deine Filter oder die Suche an.</p>
+             ${hasActiveFilter ? `<button type="button" id="empty-reset-filters" class="btn-secondary">Filter zurücksetzen</button>` : ""}`;
+      empty.classList.remove("hidden");
+      const resetBtn = document.getElementById("empty-reset-filters");
+      if (resetBtn) {
+        resetBtn.addEventListener("click", () => {
+          const form = document.getElementById("filter-form");
+          form.querySelectorAll('input[type="checkbox"][name]').forEach((b) => (b.checked = true));
+          const qInput = form.querySelector('[name="q"]');
+          if (qInput) qInput.value = "";
+          const coopBox = document.getElementById("coop-only-filter");
+          if (coopBox) coopBox.checked = false;
+          updateAllMsCounts();
+          form.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+      }
+    }
     updateBulkToolbar();
     return;
   }
-  empty.classList.add("hidden");
+  if (empty) empty.classList.add("hidden");
 
   if (currentView === "storage") {
     renderStorageView(filtered);
@@ -851,23 +982,36 @@ async function applyFiltersAndRender(items) {
       const photoHtml = photoUrl
         ? `<img src="${photoUrl}" alt="${escapeHtml(item.title)}">`
         : `<div class="no-photo">🎮</div>`;
+      // Der Status-Select liegt bewusst AUSSERHALB der <a>-Verlinkung (als
+      // Geschwister zwischen zwei "display:contents"-Links), damit ein Tipp
+      // darauf nicht gleichzeitig den Artikel öffnet. Auf dem Desktop reichte
+      // dafür ein stopPropagation() im Select, aber auf dem Handy/als
+      // installierte App (PWA) navigiert ein verschachteltes <select> in
+      // manchen Browsern trotzdem zum umschliessenden Link - daher hier
+      // strukturell gelöst, genau wie schon bei der Listenansicht-Checkbox.
       return `
-      <a class="card" href="#/item/${item.id}">
-        <div class="card-photo">
-          ${photoHtml}
-          <span class="badge badge-${item.type}">${TYPE_LABELS[item.type] || item.type}</span>
-        </div>
-        <div class="card-body">
-          <div class="card-title">${escapeHtml(item.title) || "(ohne Titel)"}</div>
-          <div class="card-console">${escapeHtml(item.console)}</div>
-          ${item.category ? `<div class="card-category">${escapeHtml(item.category)}</div>` : ""}
-          <div class="card-sale">${saleStatusInlineHtml(item)}${item.coop_campaign ? ' <span class="coop-badge">🎮 Koop</span>' : ""}</div>
-          <div class="card-prices">
-            <span>Kauf: ${item.purchase_price != null ? Number(item.purchase_price).toFixed(2) + " €" : "–"}</span>
-            <span>Wert: ${item.estimated_value != null ? Number(item.estimated_value).toFixed(2) + " €" : "–"}</span>
+      <div class="card">
+        <a class="card-link" href="#/item/${item.id}">
+          <div class="card-photo">
+            ${photoHtml}
+            <span class="badge badge-${item.type}">${TYPE_LABELS[item.type] || item.type}</span>
           </div>
-        </div>
-      </a>`;
+          <div class="card-body-top">
+            <div class="card-title">${escapeHtml(item.title) || "(ohne Titel)"}</div>
+            <div class="card-console">${escapeHtml(item.console)}</div>
+            ${item.category ? `<div class="card-category">${escapeHtml(item.category)}</div>` : ""}
+          </div>
+        </a>
+        <div class="card-sale">${saleStatusInlineHtml(item)}${item.coop_campaign ? ' <span class="coop-badge">🎮 Koop</span>' : ""}</div>
+        <a class="card-link" href="#/item/${item.id}">
+          <div class="card-body-bottom">
+            <div class="card-prices">
+              <span>Kauf: ${item.purchase_price != null ? Number(item.purchase_price).toFixed(2) + " €" : "–"}</span>
+              <span>Wert: ${item.estimated_value != null ? Number(item.estimated_value).toFixed(2) + " €" : "–"}</span>
+            </div>
+          </div>
+        </a>
+      </div>`;
     })
     .join("");
   bindInlineStatusSelects(grid, items);
