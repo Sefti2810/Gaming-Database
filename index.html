@@ -47,14 +47,8 @@
     <nav>
       <a href="#/">Übersicht</a>
       <a href="#/dashboard">📋 Dashboard</a>
-      <a href="#/verkaufen">🏷️ Verkaufen</a>
-      <a href="#/statistik">📊 Statistiken</a>
       <a href="#/add" class="btn-primary-nav">+ Artikel</a>
-      <a href="#/import">Import</a>
-      <button id="export-btn" class="link-btn">Export</button>
-      <button id="export-pdf-btn" class="link-btn">PDF</button>
       <button id="theme-toggle" class="link-btn" type="button" title="Darstellung wechseln">🌙</button>
-      <button id="logout-btn" class="link-btn">Abmelden</button>
     </nav>
   </header>
   <div id="flash" class="flash hidden"></div>
@@ -63,7 +57,15 @@
 
 <!-- Templates -->
 <template id="tpl-index">
-  <div class="item-count" id="item-count"></div>
+  <div class="list-toolbar">
+    <div class="item-count" id="item-count"></div>
+    <div class="view-toggle" role="group" aria-label="Ansicht">
+      <span class="view-toggle-indicator" id="view-toggle-indicator"></span>
+      <button type="button" id="view-grid-btn" class="view-btn" title="Kartenansicht (mit Fotos)">🔲 Karten</button>
+      <button type="button" id="view-list-btn" class="view-btn" title="Listenansicht (schneller Überblick, ohne Fotos)">📋 Liste</button>
+      <button type="button" id="view-storage-btn" class="view-btn" title="Nach Lagerort gruppiert">🗄️ Lagerort</button>
+    </div>
+  </div>
   <form class="filters" id="filter-form">
     <input type="text" name="q" placeholder="Suche: Titel, Konsole, Details…">
     <details class="ms-filter" id="type-filter">
@@ -100,12 +102,6 @@
       <option value="margin_desc">Rendite % absteigend</option>
       <option value="margin_asc">Rendite % aufsteigend</option>
     </select>
-    <div class="view-toggle" role="group" aria-label="Ansicht">
-      <span class="view-toggle-indicator" id="view-toggle-indicator"></span>
-      <button type="button" id="view-grid-btn" class="view-btn" title="Kartenansicht (mit Fotos)">🔲 Karten</button>
-      <button type="button" id="view-list-btn" class="view-btn" title="Listenansicht (schneller Überblick, ohne Fotos)">📋 Liste</button>
-      <button type="button" id="view-storage-btn" class="view-btn" title="Nach Lagerort gruppiert">🗄️ Lagerort</button>
-    </div>
   </form>
   <div id="filter-chips" class="filter-chips hidden"></div>
   <div id="bulk-toolbar" class="bulk-toolbar hidden">
@@ -142,6 +138,18 @@
     <summary>📊 Aufschlüsselung nach Konsole</summary>
     <div id="console-breakdown-body"></div>
   </details>
+
+  <div class="stat-section">
+    <h2>🔗 Organisatorisches</h2>
+    <div class="dashboard-links">
+      <a href="#/verkaufen" class="dashboard-link">🏷️ Verkaufen</a>
+      <a href="#/statistik" class="dashboard-link">📊 Statistiken</a>
+      <a href="#/import" class="dashboard-link">📥 Import</a>
+      <button type="button" id="dash-export-btn" class="dashboard-link">📤 Export (CSV)</button>
+      <button type="button" id="dash-export-pdf-btn" class="dashboard-link">📄 PDF-Export</button>
+      <button type="button" id="dash-logout-btn" class="dashboard-link dashboard-link-danger">🚪 Abmelden</button>
+    </div>
+  </div>
 </template>
 
 <template id="tpl-verkaufen">

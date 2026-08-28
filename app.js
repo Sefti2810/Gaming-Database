@@ -296,13 +296,8 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
   if (error) errBox.textContent = "⚠️ " + error.message;
 });
 
-document.getElementById("logout-btn").addEventListener("click", async () => {
-  await supabase.auth.signOut();
-  location.hash = "#/";
-});
-
-document.getElementById("export-btn").addEventListener("click", exportCsv);
-document.getElementById("export-pdf-btn").addEventListener("click", exportPdf);
+// Abmelden/Export/PDF-Export sind jetzt Teil der Dashboard-Seite (siehe
+// renderDashboard) statt fest in der Kopfzeile - dort werden sie gebunden.
 
 // ---------------------------------------------------------------------
 // Darstellung: Hell/Dunkel-Modus (Vorliebe wird im Browser gemerkt)
@@ -640,6 +635,13 @@ async function renderDashboard() {
     return;
   }
   renderStats(items || []);
+
+  document.getElementById("dash-logout-btn").addEventListener("click", async () => {
+    await supabase.auth.signOut();
+    location.hash = "#/";
+  });
+  document.getElementById("dash-export-btn").addEventListener("click", exportCsv);
+  document.getElementById("dash-export-pdf-btn").addEventListener("click", exportPdf);
 }
 
 function setView(view, items) {
