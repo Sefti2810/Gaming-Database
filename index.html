@@ -47,6 +47,7 @@
     <nav>
       <a href="#/">Übersicht</a>
       <a href="#/verkaufen">🏷️ Verkaufen</a>
+      <a href="#/statistik">📊 Statistiken</a>
       <a href="#/add" class="btn-primary-nav">+ Artikel</a>
       <a href="#/import">Import</a>
       <button id="export-btn" class="link-btn">Export</button>
@@ -162,6 +163,36 @@
     <summary>📜 Verkaufshistorie</summary>
     <div id="sold-history-body"></div>
   </details>
+</template>
+
+<template id="tpl-statistik">
+  <h1>📊 Statistiken</h1>
+  <section class="stats" id="stat-stats"></section>
+
+  <div class="stat-section">
+    <h2>🎮 Aufteilung nach Konsole</h2>
+    <div id="stat-console-breakdown"></div>
+  </div>
+
+  <div class="stat-section">
+    <h2>🗂️ Aufteilung nach Genre</h2>
+    <div id="stat-genre-breakdown"></div>
+  </div>
+
+  <div class="stat-toplists">
+    <div class="stat-section">
+      <h2>💎 Wertvollste Artikel</h2>
+      <div id="stat-top-value"></div>
+    </div>
+    <div class="stat-section">
+      <h2>📈 Größte Gewinne</h2>
+      <div id="stat-top-profit"></div>
+    </div>
+    <div class="stat-section">
+      <h2>🏆 Beste Renditen</h2>
+      <div id="stat-top-margin"></div>
+    </div>
+  </div>
 </template>
 
 <template id="tpl-add">

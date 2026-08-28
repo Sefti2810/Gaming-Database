@@ -364,6 +364,8 @@ function router() {
     renderImport();
   } else if (hash === "#/verkaufen") {
     renderVerkaufen();
+  } else if (hash === "#/statistik") {
+    renderStatistik();
   } else if (hash.startsWith("#/item/")) {
     const id = hash.split("/")[2];
     renderItem(id);
@@ -829,6 +831,124 @@ function renderConsoleBreakdown(items) {
       </tbody>
     </table>
   `;
+}
+
+// Gewinn eines einzelnen Artikels für die Statistik-Seite: bei verkauften
+// Artikeln der tatsächlich realisierte Gewinn, sonst der potentielle Gewinn
+// (gleiche Definitionen wie an anderer Stelle in der App bereits verwendet).
+function itemProfitInfo(item) {
+  const sold = item.sale_status === "sold";
+  if (item.purchase_price == null) return { profit: null, margin: null, sold };
+  const profit = sold ? realizedValue(item) - Number(item.purchase_price) : potentialProfit(item);
+  if (profit == null) return { profit: null, margin: null, sold };
+  const margin = Number(item.purchase_price) > 0 ? (profit / Number(item.purchase_price)) * 100 : null;
+  return { profit, margin, sold };
+}
+
+// Gruppiert Artikel nach einem beliebigen Merkmal (Konsole, Genre, ...) und
+// stellt Anzahl/Investition/Wert als Tabelle mit kleinem Balken dar. Wird von
+// der Statistik-Seite für die Aufteilung nach Konsole und nach Genre genutzt.
+function breakdownTableHtml(items, keyFn) {
+  const groups = {};
+  items.forEach((i) => {
+    const key = keyFn(i);
+    if (!groups[key]) groups[key] = { count: 0, invested: 0, estimated: 0 };
+    groups[key].count += 1;
+    groups[key].invested += Number(i.purchase_price) || 0;
+    groups[key].estimated += Number(i.estimated_value) || 0;
+  });
+  const rows = Object.entries(groups).sort((a, b) => b[1].count - a[1].count);
+  if (rows.length === 0) return `<p class="muted">Keine Daten vorhanden.</p>`;
+  const maxCount = Math.max(...rows.map(([, s]) => s.count));
+  return `
+    <table class="console-breakdown-table">
+      <thead>
+        <tr><th>Bezeichnung</th><th class="num">Artikel</th><th class="num">Investiert</th><th class="num">Wert</th><th>Anteil</th></tr>
+      </thead>
+      <tbody>
+        ${rows
+          .map(
+            ([name, s]) => `<tr>
+              <td>${escapeHtml(name)}</td>
+              <td class="num">${s.count}</td>
+              <td class="num">${s.invested.toFixed(2)} €</td>
+              <td class="num">${s.estimated.toFixed(2)} €</td>
+              <td><div class="breakdown-bar"><div class="breakdown-bar-fill" style="width:${Math.round((s.count / maxCount) * 100)}%"></div></div></td>
+            </tr>`
+          )
+          .join("")}
+      </tbody>
+    </table>`;
+}
+
+// Kompakte Top-5-Liste (wertvollste Artikel, größte Gewinne, beste Renditen)
+// für die Statistik-Seite. valueFn liefert den anzuzeigenden Text, clsFn
+// optional eine "pos"/"neg"-Klasse für die Einfärbung.
+function topListHtml(list, valueFn, clsFn) {
+  if (list.length === 0) return `<p class="muted">Keine Daten vorhanden.</p>`;
+  return `<div class="stat-list">${list
+    .map(
+      (item, idx) => `
+    <a class="stat-list-row" href="#/item/${item.id}">
+      <span class="stat-list-rank">${idx + 1}</span>
+      <span class="stat-list-title">${escapeHtml(item.title) || "(ohne Titel)"}</span>
+      <span class="stat-list-console">${escapeHtml(item.console)}</span>
+      <span class="stat-list-value ${clsFn ? clsFn(item) : ""}">${valueFn(item)}</span>
+    </a>`
+    )
+    .join("")}</div>`;
+}
+
+async function renderStatistik() {
+  const main = document.getElementById("main");
+  main.innerHTML = "";
+  main.appendChild(document.getElementById("tpl-statistik").content.cloneNode(true));
+  const { data: allItems, error } = await supabase.from("items").select("*");
+  if (error) {
+    main.innerHTML = `<div class="notice">Fehler beim Laden: ${error.message}</div>`;
+    return;
+  }
+  const items = allItems || [];
+  const soldItems = items.filter((i) => i.sale_status === "sold");
+  const totalInvested = items.reduce((s, i) => s + (Number(i.purchase_price) || 0), 0);
+  const totalEstimated = items.reduce((s, i) => s + (Number(i.estimated_value) || 0), 0);
+  const totalPotentialProfit = totalEstimated - totalInvested;
+  const totalRealizedProfit = soldItems.reduce((s, i) => s + (realizedValue(i) - (Number(i.purchase_price) || 0)), 0);
+
+  document.getElementById("stat-stats").innerHTML =
+    statCardHtml("📦", "Gesamtbestand", items.length) +
+    statCardHtml("💶", "Investition", eur(totalInvested)) +
+    statCardHtml("💰", "Geschätzter Wert", eur(totalEstimated), "", true) +
+    statCardHtml("📊", "Potentieller Gewinn", signedEur(totalPotentialProfit), totalPotentialProfit >= 0 ? "pos" : "neg", true) +
+    statCardHtml("📈", "Realisierter Gewinn", signedEur(totalRealizedProfit), totalRealizedProfit >= 0 ? "pos" : "neg");
+
+  document.getElementById("stat-console-breakdown").innerHTML = breakdownTableHtml(items, (i) => i.console || "(ohne Konsole)");
+  document.getElementById("stat-genre-breakdown").innerHTML = breakdownTableHtml(items, (i) => i.category || "(ohne Genre)");
+
+  const topValue = items
+    .filter((i) => i.estimated_value != null)
+    .sort((a, b) => Number(b.estimated_value) - Number(a.estimated_value))
+    .slice(0, 5);
+  document.getElementById("stat-top-value").innerHTML = topListHtml(topValue, (i) => eur(i.estimated_value));
+
+  const withProfit = items.map((i) => ({ item: i, info: itemProfitInfo(i) })).filter((x) => x.info.profit != null);
+  const topProfit = [...withProfit].sort((a, b) => b.info.profit - a.info.profit).slice(0, 5);
+  document.getElementById("stat-top-profit").innerHTML = topListHtml(
+    topProfit.map((x) => x.item),
+    (i) => signedEur(itemProfitInfo(i).profit),
+    (i) => (itemProfitInfo(i).profit >= 0 ? "pos" : "neg")
+  );
+
+  const withMargin = withProfit.filter((x) => x.info.margin != null);
+  const topMargin = [...withMargin].sort((a, b) => b.info.margin - a.info.margin).slice(0, 5);
+  document.getElementById("stat-top-margin").innerHTML = topListHtml(
+    topMargin.map((x) => x.item),
+    (i) => {
+      const m = itemProfitInfo(i).margin;
+      return (m >= 0 ? "+" : "") + m.toFixed(1) + " %";
+    },
+    (i) => (itemProfitInfo(i).margin >= 0 ? "pos" : "neg")
+  );
 }
 
 // Eine Zeile der Listenansicht (auch von der Lagerort-Ansicht wiederverwendet).
