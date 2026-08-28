@@ -374,6 +374,8 @@ function router() {
     renderAdd();
   } else if (hash === "#/import") {
     renderImport();
+  } else if (hash === "#/dashboard") {
+    renderDashboard();
   } else if (hash === "#/verkaufen") {
     renderVerkaufen();
   } else if (hash === "#/statistik") {
@@ -625,6 +627,21 @@ async function renderIndex() {
   ensureBulkCheckboxHandler();
 }
 
+// Eigene Dashboard-Seite: die Kennzahlen-Kacheln + Konsolen-Aufschlüsselung,
+// die vorher oben auf der Übersicht standen, jetzt auf einer eigenen Seite,
+// damit die Übersicht direkt mit Filtern/Artikeln beginnt.
+async function renderDashboard() {
+  const main = document.getElementById("main");
+  main.innerHTML = "";
+  main.appendChild(document.getElementById("tpl-dashboard").content.cloneNode(true));
+  const { data: items, error } = await supabase.from("items").select("*");
+  if (error) {
+    main.innerHTML = `<div class="notice">Fehler beim Laden: ${error.message}</div>`;
+    return;
+  }
+  renderStats(items || []);
+}
+
 function setView(view, items) {
   currentView = view;
   if (view === "grid") selectedIds.clear();
@@ -788,6 +805,8 @@ function statCardHtml(icon, label, value, cls, highlight) {
 }
 
 function renderStats(items) {
+  const statsBox = document.getElementById("stats");
+  if (!statsBox) return;
   const totalItems = items.length;
   const totalInvested = items.reduce((s, i) => s + (Number(i.purchase_price) || 0), 0);
   const totalEstimated = items.reduce((s, i) => s + (Number(i.estimated_value) || 0), 0);
@@ -796,7 +815,7 @@ function renderStats(items) {
   const totalSold = soldItems.reduce((s, i) => s + realizedValue(i), 0);
   const soldInvested = soldItems.reduce((s, i) => s + (Number(i.purchase_price) || 0), 0);
   const soldProfit = totalSold - soldInvested;
-  document.getElementById("stats").innerHTML =
+  statsBox.innerHTML =
     statCardHtml("📦", "Artikel gesamt", totalItems) +
     statCardHtml("💶", "Investiert", eur(totalInvested)) +
     statCardHtml("💰", "Geschätzter Wert", eur(totalEstimated), "", true) +
@@ -1138,6 +1157,12 @@ async function applyFiltersAndRender(items) {
     }
     return true;
   });
+
+  const itemCountEl = document.getElementById("item-count");
+  if (itemCountEl) {
+    itemCountEl.textContent =
+      filtered.length === items.length ? `${items.length} Artikel` : `${filtered.length} von ${items.length} Artikeln`;
+  }
 
   // Gewinn/Rendite werden nur berechnet, wenn Kaufpreis UND Wert vorhanden sind;
   // fehlende Werte landen beim Sortieren immer ans Ende, statt die Reihenfolge

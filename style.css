@@ -162,9 +162,14 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
   color: var(--text);
 }
 
+/* Kleine, dezente Artikelzahl über den Filtern auf der Übersicht (ersetzt die
+   frueher dort eingebetteten Kennzahlen-Kacheln, die jetzt auf der eigenen
+   Dashboard-Seite stehen). */
+.item-count { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px; }
+
 .stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
   gap: 10px;
   margin-bottom: 18px;
 }
@@ -189,7 +194,10 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
 }
 .stat-body { min-width: 0; }
 .stat-label { font-size: 0.72rem; color: var(--text-muted); margin-bottom: 1px; white-space: nowrap; }
-.stat-value { font-size: 1.08rem; font-weight: 700; font-family: var(--font-display); }
+.stat-value {
+  font-size: 1.08rem; font-weight: 700; font-family: var(--font-display);
+  overflow-wrap: anywhere; word-break: break-word;
+}
 .stat-card.pos { border-left-color: var(--pos); }
 .stat-card.pos .stat-value { color: var(--pos); }
 .stat-card.neg { border-left-color: var(--neg); }
@@ -203,7 +211,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
 }
 .stat-card.highlight .stat-icon { width: 40px; height: 40px; font-size: 1.35rem; border-radius: 11px; }
 .stat-card.highlight .stat-label { font-size: 0.78rem; }
-.stat-card.highlight .stat-value { font-size: 1.5rem; }
+.stat-card.highlight .stat-value { font-size: 1.2rem; }
 
 .console-breakdown {
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
@@ -600,10 +608,10 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
 }
 /* Wertblock am Kartenfuss: Marktwert gross/fett als wichtigste Information,
    Kaufpreis und potentieller Gewinn kompakt darunter. */
-.card-value-block { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
-.card-value-main { font-size: 1.25rem; font-weight: 700; font-family: var(--font-display); line-height: 1.1; }
-.card-value-label { font-size: 0.7rem; color: var(--text-muted); margin-bottom: 4px; }
-.card-value-sub { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted); }
+.card-value-block { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
+.card-value-main { font-size: 0.95rem; font-weight: 600; font-family: var(--font-display); line-height: 1.1; }
+.card-value-label { font-size: 0.68rem; color: var(--text-muted); margin-bottom: 3px; }
+.card-value-sub { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); }
 .card-value-sub .pos { color: var(--pos); font-weight: 600; }
 .card-value-sub .neg { color: var(--neg); font-weight: 600; }
 

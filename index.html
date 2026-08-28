@@ -46,6 +46,7 @@
     <a class="brand" href="#/">🎮 Sammlung-Tracker</a>
     <nav>
       <a href="#/">Übersicht</a>
+      <a href="#/dashboard">📋 Dashboard</a>
       <a href="#/verkaufen">🏷️ Verkaufen</a>
       <a href="#/statistik">📊 Statistiken</a>
       <a href="#/add" class="btn-primary-nav">+ Artikel</a>
@@ -62,11 +63,7 @@
 
 <!-- Templates -->
 <template id="tpl-index">
-  <section class="stats" id="stats"></section>
-  <details class="console-breakdown" id="console-breakdown">
-    <summary>📊 Aufschlüsselung nach Konsole</summary>
-    <div id="console-breakdown-body"></div>
-  </details>
+  <div class="item-count" id="item-count"></div>
   <form class="filters" id="filter-form">
     <input type="text" name="q" placeholder="Suche: Titel, Konsole, Details…">
     <details class="ms-filter" id="type-filter">
@@ -136,6 +133,15 @@
   <div id="grid" class="grid"></div>
   <div id="storage-view" class="storage-view hidden"></div>
   <div id="empty-state" class="empty-state hidden"></div>
+</template>
+
+<template id="tpl-dashboard">
+  <h1>📋 Dashboard</h1>
+  <section class="stats" id="stats"></section>
+  <details class="console-breakdown" id="console-breakdown">
+    <summary>📊 Aufschlüsselung nach Konsole</summary>
+    <div id="console-breakdown-body"></div>
+  </details>
 </template>
 
 <template id="tpl-verkaufen">
