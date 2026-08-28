@@ -140,12 +140,28 @@
 <template id="tpl-verkaufen">
   <h1>🏷️ Verkaufen</h1>
   <section class="stats" id="sell-stats"></section>
+  <div id="sell-toolbar" class="sell-toolbar hidden">
+    <label class="select-all-label"><input type="checkbox" id="list-select-all"> Alle auswählen</label>
+    <span class="status-text">Mehrere Artikel auswählen, um einen Paketpreis zu berechnen.</span>
+  </div>
   <div id="sell-list" class="sell-list"></div>
   <div id="sell-empty" class="empty-state hidden">
     <div class="empty-state-icon">🏷️</div>
     <p>Aktuell ist kein Artikel zum Verkauf vorgesehen.</p>
     <p class="empty-sub">Setze bei einem Artikel den Verkaufsstatus auf „Zum Verkauf vorgesehen“, damit er hier erscheint.</p>
   </div>
+  <div id="package-calc" class="calc-box hidden">
+    <h3>📦 Paket-Rechner</h3>
+    <div id="package-items" class="package-items"></div>
+    <div class="calc-grid">
+      <label>Paketpreis (€)<input type="number" step="0.01" min="0" id="package-price" placeholder="z. B. 45"></label>
+    </div>
+    <div id="package-result" class="package-result"></div>
+  </div>
+  <details class="console-breakdown" id="sold-history">
+    <summary>📜 Verkaufshistorie</summary>
+    <div id="sold-history-body"></div>
+  </details>
 </template>
 
 <template id="tpl-add">

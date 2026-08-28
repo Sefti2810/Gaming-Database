@@ -665,6 +665,7 @@ function ensureBulkCheckboxHandler() {
         else selectedIds.delete(id);
       });
       updateBulkToolbar();
+      updatePackageCalc();
       return;
     }
     const cb = e.target.closest(".list-row-check");
@@ -673,6 +674,7 @@ function ensureBulkCheckboxHandler() {
     if (cb.checked) selectedIds.add(id);
     else selectedIds.delete(id);
     updateBulkToolbar();
+    updatePackageCalc();
   });
 }
 
@@ -1152,13 +1154,21 @@ async function applyFiltersAndRender(items) {
 // ---------------------------------------------------------------------
 // Verkaufen-Bereich: zeigt nur Artikel mit Verkaufsstatus "Zum Verkauf
 // vorgesehen" (bestehende Statusfunktion, keine neue parallele Logik) mit
-// einer Zusammenfassung oben. Nutzt den bestehenden Favoriten-/Status-Code.
+// Zusammenfassung, Mehrfachauswahl + Paket-Rechner, und der Verkaufshistorie
+// (bereits verkaufte Artikel) darunter.
 // ---------------------------------------------------------------------
+// sellItemsCache haelt die aktuell zum Verkauf stehenden Artikel, damit der
+// Paket-Rechner (ausgeloest von der global delegierten Checkbox-Behandlung in
+// ensureBulkCheckboxHandler) jederzeit auf die Artikeldaten zugreifen kann.
+let sellItemsCache = [];
+
 function sellRowHtml(item) {
   const expected = expectedSalePrice(item);
   const profit = item.purchase_price != null && expected != null ? expected - Number(item.purchase_price) : null;
+  const checked = selectedIds.has(item.id) ? "checked" : "";
   return `
       <div class="sell-row">
+        <span class="list-check"><input type="checkbox" class="list-row-check" data-id="${item.id}" ${checked}></span>
         <span class="list-fav">${favoriteButtonHtml(item)}</span>
         <a class="list-row-link" href="#/item/${item.id}">
           <span class="sell-title">${escapeHtml(item.title) || "(ohne Titel)"}</span>
@@ -1173,34 +1183,125 @@ function sellRowHtml(item) {
       </div>`;
 }
 
+function renderSoldHistory(soldItems) {
+  const box = document.getElementById("sold-history-body");
+  if (!box) return;
+  if (soldItems.length === 0) {
+    box.innerHTML = `<p class="empty-sub">Noch keine Verkäufe erfasst.</p>`;
+    return;
+  }
+  const revenue = soldItems.reduce((s, i) => s + realizedValue(i), 0);
+  const invested = soldItems.reduce((s, i) => s + (Number(i.purchase_price) || 0), 0);
+  const profit = revenue - invested;
+  const rows = soldItems
+    .map((i) => {
+      const p = i.sold_price != null && i.purchase_price != null ? Number(i.sold_price) - Number(i.purchase_price) : null;
+      return `<div class="sold-row">
+        <span class="sold-title">${escapeHtml(i.title) || "(ohne Titel)"}</span>
+        <span class="sold-console">${escapeHtml(i.console)}</span>
+        <span class="list-price">Kauf: ${eur(i.purchase_price)}</span>
+        <span class="list-price">Verkauft: ${eur(i.sold_price)}</span>
+        <span class="list-price ${p == null ? "" : p >= 0 ? "pos" : "neg"}">${p == null ? "–" : signedEur(p)}</span>
+      </div>`;
+    })
+    .join("");
+  box.innerHTML = `
+    <div class="sold-summary">
+      <span><strong>${soldItems.length}</strong> Verkäufe</span>
+      <span><strong>${eur(revenue)}</strong> Umsatz</span>
+      <span><strong>${eur(invested)}</strong> Einkaufskosten</span>
+      <span class="${profit >= 0 ? "pos" : "neg"}"><strong>${signedEur(profit)}</strong> Gewinn</span>
+    </div>
+    <div class="sold-list">${rows}</div>`;
+}
+
+// Liest live Auswahl + Artikeldaten und aktualisiert die Ausgabe des
+// Paket-Rechners. Wird sowohl bei Auswahl-Aenderungen als auch bei jeder
+// Eingabe im Paketpreis-Feld aufgerufen (siehe updatePackageCalc).
+function recomputePackageResult() {
+  const itemsBox = document.getElementById("package-items");
+  const resultBox = document.getElementById("package-result");
+  const priceInput = document.getElementById("package-price");
+  if (!itemsBox || !resultBox || !priceInput) return;
+
+  const selected = sellItemsCache.filter((i) => selectedIds.has(i.id));
+  itemsBox.innerHTML = selected
+    .map((i) => `<span class="package-item">${escapeHtml(i.title) || "(ohne Titel)"} – ${eur(expectedSalePrice(i))}</span>`)
+    .join("");
+
+  const singleSum = selected.reduce((s, i) => s + (expectedSalePrice(i) || 0), 0);
+  const invested = selected.reduce((s, i) => s + (Number(i.purchase_price) || 0), 0);
+  const packagePrice = parseFloat(priceInput.value);
+
+  if (isNaN(packagePrice)) {
+    resultBox.innerHTML = `
+      <div><span class="label">Einzelwert-Summe</span><strong>${eur(singleSum)}</strong></div>
+      <div><span class="label">Einkaufskosten</span><strong>${eur(invested)}</strong></div>`;
+    return;
+  }
+  const discount = singleSum - packagePrice;
+  const discountPct = singleSum > 0 ? (discount / singleSum) * 100 : 0;
+  const profit = packagePrice - invested;
+  const marginPct = invested > 0 ? (profit / invested) * 100 : null;
+  resultBox.innerHTML = `
+    <div><span class="label">Einzelwert-Summe</span><strong>${eur(singleSum)}</strong></div>
+    <div><span class="label">Rabatt</span><strong>${eur(discount)} (${discountPct.toFixed(1)} %)</strong></div>
+    <div><span class="label">Einkaufskosten</span><strong>${eur(invested)}</strong></div>
+    <div><span class="label">Gewinn</span><strong class="${profit >= 0 ? "pos" : "neg"}">${signedEur(profit)}</strong></div>
+    <div><span class="label">Rendite</span><strong class="${marginPct == null ? "" : marginPct >= 0 ? "pos" : "neg"}">${
+    marginPct == null ? "–" : (marginPct >= 0 ? "+" : "") + marginPct.toFixed(1) + " %"
+  }</strong></div>`;
+}
+
+// Zeigt/versteckt den Paket-Rechner je nach Auswahlgroesse (ab 2 Artikeln
+// sinnvoll) und bindet das Paketpreis-Feld einmalig. Wird von der global
+// delegierten Checkbox-Behandlung (ensureBulkCheckboxHandler) aufgerufen -
+// existiert auf anderen Seiten kein #package-calc, ist dieser Aufruf ein No-op.
+function updatePackageCalc() {
+  const box = document.getElementById("package-calc");
+  if (!box) return;
+  const count = sellItemsCache.filter((i) => selectedIds.has(i.id)).length;
+  box.classList.toggle("hidden", count < 2);
+  const priceInput = document.getElementById("package-price");
+  if (priceInput && !priceInput.dataset.calcBound) {
+    priceInput.dataset.calcBound = "1";
+    priceInput.addEventListener("input", recomputePackageResult);
+  }
+  if (count >= 2) recomputePackageResult();
+}
+
 async function renderVerkaufen() {
   const main = document.getElementById("main");
   main.innerHTML = "";
   main.appendChild(document.getElementById("tpl-verkaufen").content.cloneNode(true));
   selectedIds.clear();
 
-  const { data: items, error } = await supabase
-    .from("items")
-    .select("*")
-    .eq("sale_status", "for_sale")
-    .order("created_at", { ascending: false });
+  const { data: allItems, error } = await supabase.from("items").select("*").order("created_at", { ascending: false });
 
   if (error) {
     main.innerHTML = `<div class="notice">Fehler beim Laden: ${error.message}</div>`;
     return;
   }
 
+  const items = (allItems || []).filter((i) => i.sale_status === "for_sale");
+  const soldItems = (allItems || []).filter((i) => i.sale_status === "sold");
+  sellItemsCache = items;
+  renderSoldHistory(soldItems);
+
   const list = document.getElementById("sell-list");
   const empty = document.getElementById("sell-empty");
   const statsBox = document.getElementById("sell-stats");
+  const toolbar = document.getElementById("sell-toolbar");
 
-  if (!items || items.length === 0) {
+  if (items.length === 0) {
     statsBox.innerHTML = "";
     list.innerHTML = "";
+    if (toolbar) toolbar.classList.add("hidden");
     empty.classList.remove("hidden");
     return;
   }
   empty.classList.add("hidden");
+  if (toolbar) toolbar.classList.remove("hidden");
 
   const invested = items.reduce((s, i) => s + (Number(i.purchase_price) || 0), 0);
   const expected = items.reduce((s, i) => s + (expectedSalePrice(i) || 0), 0);
@@ -1214,6 +1315,8 @@ async function renderVerkaufen() {
   list.innerHTML = items.map(sellRowHtml).join("");
   bindInlineStatusSelects(list, items, () => renderVerkaufen());
   bindFavoriteButtons(list, items, () => renderVerkaufen());
+  ensureBulkCheckboxHandler();
+  updatePackageCalc();
 }
 
 // ---------------------------------------------------------------------
