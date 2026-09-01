@@ -45,30 +45,27 @@
   <header class="topbar">
     <a class="brand" href="#/">🎮 Sammlung-Tracker</a>
     <nav>
-      <a href="#/">Übersicht</a>
-      <a href="#/dashboard">📋 Dashboard</a>
-      <a href="#/add" class="btn-primary-nav">+ Artikel</a>
       <button id="theme-toggle" class="link-btn" type="button" title="Darstellung wechseln">🌙</button>
     </nav>
   </header>
   <div id="flash" class="flash hidden"></div>
   <main id="main"></main>
+  <nav class="bottom-nav" id="bottom-nav" aria-label="Hauptnavigation">
+    <a href="#/" class="bottom-nav-item" title="Übersicht"><span class="bottom-nav-icon">🏠</span></a>
+    <a href="#/favoriten" class="bottom-nav-item" title="Favoriten"><span class="bottom-nav-icon">⭐</span></a>
+    <a href="#/add" class="bottom-nav-item bottom-nav-add" title="Artikel hinzufügen"><span class="bottom-nav-icon">➕</span></a>
+    <a href="#/coop" class="bottom-nav-item" title="Koop/Kampagne"><span class="bottom-nav-icon">🎮</span></a>
+    <a href="#/dashboard" class="bottom-nav-item" title="Dashboard"><span class="bottom-nav-icon">📋</span></a>
+  </nav>
 </div>
 
 <!-- Templates -->
 <template id="tpl-index">
-  <div class="list-toolbar">
-    <div class="item-count" id="item-count"></div>
-    <div class="view-toggle" role="group" aria-label="Ansicht">
-      <span class="view-toggle-indicator" id="view-toggle-indicator"></span>
-      <button type="button" id="view-grid-btn" class="view-btn" title="Kartenansicht (mit Fotos)">🔲 Karten</button>
-      <button type="button" id="view-list-btn" class="view-btn" title="Listenansicht (schneller Überblick, ohne Fotos)">📋 Liste</button>
-      <button type="button" id="view-storage-btn" class="view-btn" title="Nach Lagerort gruppiert">🗄️ Lagerort</button>
-      <button type="button" id="view-cube-btn" class="view-btn" title="Würfelansicht (kompakt, 2 pro Reihe)">🧊 Würfel</button>
-    </div>
-  </div>
   <form class="filters" id="filter-form">
-    <input type="text" name="q" placeholder="Suche: Titel, Konsole, Details…">
+    <div class="search-bar">
+      <span class="search-icon">🔍</span>
+      <input type="text" name="q" id="q-input" placeholder="Suche: Titel, Konsole, Details…">
+    </div>
     <details class="ms-filter" id="type-filter">
       <summary>Typ <span class="ms-count"></span></summary>
       <div class="ms-options"></div>
@@ -104,6 +101,16 @@
       <option value="margin_asc">Rendite % aufsteigend</option>
     </select>
   </form>
+  <div class="list-toolbar">
+    <div class="item-count" id="item-count"></div>
+    <div class="view-toggle" role="group" aria-label="Ansicht">
+      <span class="view-toggle-indicator" id="view-toggle-indicator"></span>
+      <button type="button" id="view-grid-btn" class="view-btn" title="Karten (Zeilenübersicht mit Foto)">🔲</button>
+      <button type="button" id="view-list-btn" class="view-btn" title="Liste (nur Daten, ohne Foto)">📋</button>
+      <button type="button" id="view-storage-btn" class="view-btn" title="Nach Lagerort gruppiert">🗄️</button>
+      <button type="button" id="view-cube-btn" class="view-btn" title="Würfel (kompakte Kacheln)">🧊</button>
+    </div>
+  </div>
   <div id="filter-chips" class="filter-chips hidden"></div>
   <div id="bulk-toolbar" class="bulk-toolbar hidden">
     <span id="bulk-count" class="status-text"></span>

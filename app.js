@@ -353,7 +353,7 @@ window.addEventListener("hashchange", router);
 // Auswirkung auf die eigentliche Navigation/Routing-Logik.
 function updateNavActive() {
   const hash = location.hash || "#/";
-  document.querySelectorAll(".topbar nav a").forEach((a) => {
+  document.querySelectorAll(".topbar nav a, .bottom-nav-item").forEach((a) => {
     const href = a.getAttribute("href");
     const isActive = href === "#/" ? hash === "#/" || hash === "" || hash.startsWith("#/item/") : hash === href;
     a.classList.toggle("nav-active", isActive);
@@ -364,7 +364,11 @@ function router() {
   const hash = location.hash || "#/";
   updateNavActive();
   if (hash === "#/" || hash === "") {
-    renderIndex();
+    renderIndex({});
+  } else if (hash === "#/favoriten") {
+    renderIndex({ favoritesOnly: true });
+  } else if (hash === "#/coop") {
+    renderIndex({ coopOnly: true });
   } else if (hash === "#/add") {
     renderAdd();
   } else if (hash === "#/import") {
@@ -379,7 +383,7 @@ function router() {
     const id = hash.split("/")[2];
     renderItem(id);
   } else {
-    renderIndex();
+    renderIndex({});
   }
 }
 
@@ -585,7 +589,7 @@ function skeletonGridHtml(count = 8) {
     .join("");
 }
 
-async function renderIndex() {
+async function renderIndex(preset) {
   const main = document.getElementById("main");
   main.innerHTML = "";
   main.appendChild(document.getElementById("tpl-index").content.cloneNode(true));
@@ -608,6 +612,14 @@ async function renderIndex() {
   renderStats(items);
   populateFilters(items);
   restoreFilterState();
+  // Kurzfilter aus der Bottom-Navigation (⭐ Favoriten / 🎮 Coop) setzen den
+  // jeweiligen Haken deterministisch, unabhängig vom zuletzt gespeicherten
+  // Filterstand - jeder Tab soll immer zuverlässig dasselbe zeigen. Die
+  // normale Übersicht ("#/") setzt beide bewusst zurück.
+  const favBox = document.getElementById("favorites-only-filter");
+  const coopBox = document.getElementById("coop-only-filter");
+  if (favBox) favBox.checked = !!preset?.favoritesOnly;
+  if (coopBox) coopBox.checked = !!preset?.coopOnly;
   updateViewButtons();
   applyFiltersAndRender(items);
 
@@ -1293,6 +1305,12 @@ async function applyFiltersAndRender(items) {
     return;
   }
 
+  // Standardansicht "Karten": schlanke Zeilen-Karten (kleines Foto links,
+  // Titel/Konsole/Preis in der Mitte, Status-Pill + Favoriten-Stern rechts) -
+  // angelehnt an die Referenz, die Stefan geschickt hat (Produktliste statt
+  // grosser Foto-Kacheln). Status-Select und Stern liegen bewusst AUSSERHALB
+  // der <a>-Verlinkung (siehe Kommentar bei .list-row weiter unten) - selbe
+  // Struktur, nur mit anderem visuellen Layout.
   const firstPhotoPaths = filtered.map((i) => i.photos?.[0]).filter(Boolean);
   const urlMap = await getSignedUrlMap(firstPhotoPaths);
 
@@ -1302,40 +1320,16 @@ async function applyFiltersAndRender(items) {
       const photoHtml = photoUrl
         ? `<img src="${photoUrl}" alt="${escapeHtml(item.title)}">`
         : `<div class="no-photo">🎮</div>`;
-      // Der Status-Select UND der Favoriten-Stern liegen bewusst AUSSERHALB
-      // der <a>-Verlinkung (als Geschwister zwischen zwei "display:contents"-
-      // Links), damit ein Tipp darauf nicht gleichzeitig den Artikel öffnet.
-      // Auf dem Desktop reichte dafür ein stopPropagation(), aber auf dem
-      // Handy/als installierte App (PWA) navigiert ein verschachteltes
-      // interaktives Element in manchen Browsern trotzdem zum umschliessenden
-      // Link - daher hier strukturell gelöst, genau wie bei der Checkbox.
-      const profit = potentialProfit(item);
       return `
-      <div class="card">
+      <div class="card-row">
+        <a class="card-row-link" href="#/item/${item.id}">
+          <div class="card-row-photo">${photoHtml}</div>
+          <div class="card-row-title">${escapeHtml(item.title) || "(ohne Titel)"}${item.coop_campaign ? ' <span class="coop-badge">🎮</span>' : ""}</div>
+          <div class="card-row-console">${escapeHtml(item.console)}${item.category ? " · " + escapeHtml(item.category) : ""}</div>
+          <div class="card-row-price">${eur(item.estimated_value)}</div>
+        </a>
+        <span class="card-row-status">${saleStatusInlineHtml(item)}</span>
         ${favoriteButtonHtml(item)}
-        <a class="card-link" href="#/item/${item.id}">
-          <div class="card-photo">
-            ${photoHtml}
-            <span class="badge badge-${item.type}">${TYPE_LABELS[item.type] || item.type}</span>
-          </div>
-          <div class="card-body-top">
-            <div class="card-title">${escapeHtml(item.title) || "(ohne Titel)"}</div>
-            <div class="card-console">${escapeHtml(item.console)}${item.category ? " · " + escapeHtml(item.category) : ""}</div>
-          </div>
-        </a>
-        <div class="card-sale">${saleStatusInlineHtml(item)}${item.coop_campaign ? ' <span class="coop-badge">🎮 Koop</span>' : ""}</div>
-        <a class="card-link" href="#/item/${item.id}">
-          <div class="card-body-bottom">
-            <div class="card-value-block">
-              <div class="card-value-main">${eur(item.estimated_value)}</div>
-              <div class="card-value-label">Geschätzter Marktwert</div>
-              <div class="card-value-sub">
-                <span>Kauf: ${eur(item.purchase_price)}</span>
-                <span class="${profit == null ? "" : profit >= 0 ? "pos" : "neg"}">Gewinn: ${signedEur(profit)}</span>
-              </div>
-            </div>
-          </div>
-        </a>
       </div>`;
     })
     .join("");

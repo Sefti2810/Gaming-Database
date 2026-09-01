@@ -122,6 +122,47 @@ a:hover { text-decoration: underline; }
   padding: 6px 14px;
   border-radius: 8px;
 }
+
+/* Untere App-Navigation (die Seite wird fast ausschließlich mobil genutzt,
+   daher liegt die Hauptnavigation - wie bei einer Handy-App - unten statt in
+   der Kopfzeile): Übersicht, Favoriten- und Coop-Kurzfilter, das
+   hervorgehobene "+" zum Hinzufügen, und das Dashboard. */
+.bottom-nav {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 200;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.08);
+}
+.bottom-nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  color: var(--text-muted);
+  font-size: 1.3rem;
+  text-decoration: none;
+  transition: color .15s ease, background .15s ease;
+}
+.bottom-nav-item:hover { text-decoration: none; color: var(--text); }
+.bottom-nav-item.nav-active { color: var(--accent-dark); background: var(--surface-2); }
+.bottom-nav-add {
+  width: 54px; height: 54px;
+  margin-top: -24px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 1.5rem;
+  box-shadow: var(--shadow-md);
+}
+.bottom-nav-add:hover { background: var(--accent-dark); color: #fff; }
+.bottom-nav-add.nav-active { background: var(--accent); color: #fff; }
 .btn-primary-nav:hover { background: var(--accent-dark); text-decoration: none; }
 .link-btn {
   background: none; border: none; color: var(--accent-dark); cursor: pointer;
@@ -129,7 +170,9 @@ a:hover { text-decoration: underline; }
 }
 .link-btn:hover { text-decoration: underline; }
 
-main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
+/* Unten genug Platz lassen, damit Inhalte nicht hinter der fixen
+   Bottom-Navigation verschwinden (siehe .bottom-nav). */
+main { max-width: 1100px; margin: 0 auto; padding: 24px 20px calc(84px + env(safe-area-inset-bottom)); }
 
 /* Schwebender Toast statt fixer Leiste: erscheint unten mittig, blendet sanft
    ein/aus und verschiebt dabei nie den restlichen Seiteninhalt. */
@@ -278,7 +321,25 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
   color: var(--text);
   font-size: 0.9rem;
 }
-.filters input[type=text] { flex: 1; min-width: 180px; }
+/* Suchleiste: eigene, prominente Zeile ganz oben im Filter-Formular (bleibt
+   technisch Teil von #filter-form, damit die bestehende FormData-basierte
+   Filterlogik unveraendert funktioniert - nur optisch aus der Zeile der
+   restlichen Filter herausgezogen). */
+.filters .search-bar {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+.filters .search-bar .search-icon { font-size: 1rem; opacity: 0.55; flex-shrink: 0; }
+.filters .search-bar input[name="q"] {
+  flex: 1; min-width: 0; border: none; background: none; outline: none; padding: 0;
+  font-size: 0.95rem; color: var(--text);
+}
 
 /* Mehrfachauswahl-Filter (z.B. Verkaufsstatus): <details>/<summary> statt <select>,
    damit man mehrere Haken gleichzeitig setzen kann (z.B. "Verkauft" ausblenden,
@@ -341,17 +402,16 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
   transition: transform .2s ease;
   z-index: 0;
 }
+/* Nur noch Icons statt Icon+Text - kompakter, passt auch mit vier Ansichten
+   problemlos auf schmale Handybildschirme (Beschriftung steht als Tooltip
+   im title-Attribut weiterhin zur Verfügung). */
 .view-btn {
   position: relative; z-index: 1; flex: 1;
+  display: flex; align-items: center; justify-content: center;
   border: none; background: transparent; color: var(--text-muted);
-  padding: 8px 10px; font-size: 0.85rem; cursor: pointer; font-family: inherit;
-  border-radius: 7px; white-space: nowrap;
+  padding: 8px 6px; font-size: 1.15rem; line-height: 1; cursor: pointer; font-family: inherit;
+  border-radius: 7px;
   transition: color .2s ease;
-}
-/* Bei vier Ansichts-Buttons wird es auf schmalen Handys eng - Beschriftung
-   dort etwas kompakter darstellen, damit nichts umbricht oder überläuft. */
-@media (max-width: 480px) {
-  .view-btn { padding: 7px 5px; font-size: 0.68rem; }
 }
 .view-btn.active { color: #fff; }
 
@@ -413,15 +473,17 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
 }
 
 .grid, .storage-view { transition: opacity .18s ease; }
+/* Standardansicht "Karten": schlanke Zeilen-Karten untereinander statt
+   grosser Foto-Kacheln (siehe .card-row weiter unten). */
 .grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.grid.list { display: flex; flex-direction: column; gap: 0; }
-/* Würfelansicht: immer zwei kompakte Kacheln nebeneinander, auch auf dem
+.grid.list { gap: 0; }
+/* Würfelansicht: immer drei kompakte Kacheln nebeneinander, auch auf dem
    Handy - angelehnt an Produktraster wie z.B. bei Zalando. */
-.grid.cube { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.grid.cube { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .cube-card {
   position: relative;
   background: var(--card);
@@ -435,14 +497,14 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
 .cube-card-link { display: contents; color: inherit; text-decoration: none; cursor: pointer; }
 .cube-card-photo { position: relative; aspect-ratio: 1/1; background: var(--photo-bg); }
 .cube-card-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.cube-card-photo .no-photo { font-size: 1.6rem; }
-.cube-card-body { padding: 8px 10px 10px; }
+.cube-card-photo .no-photo { font-size: 1.3rem; }
+.cube-card-body { padding: 6px 7px 8px; }
 .cube-card-title {
-  font-weight: 600; font-size: 0.82rem; font-family: var(--font-display);
+  font-weight: 600; font-size: 0.74rem; font-family: var(--font-display);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 1px;
 }
-.cube-card-console { font-size: 0.72rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cube-card-price { font-size: 0.85rem; font-weight: 700; font-family: var(--font-display); margin-top: 4px; }
+.cube-card-console { font-size: 0.64rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cube-card-price { font-size: 0.76rem; font-weight: 700; font-family: var(--font-display); margin-top: 3px; }
 .cube-card .fav-btn {
   position: absolute; top: 6px; right: 6px; z-index: 2;
   background: rgba(0,0,0,0.55); border-radius: 50%;
@@ -450,6 +512,40 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
   font-size: 0.9rem;
 }
 .cube-card .fav-btn:not(.is-fav) { color: #fff; }
+
+/* Standardansicht "Karten": schlanke Zeilen-Karte statt grosser Foto-Kachel -
+   kleines Foto links, Titel/Konsole/Preis in der Mitte, Status-Pill rechts,
+   Favoriten-Stern oben rechts. Status-Select und Stern liegen bewusst als
+   echte Geschwister außerhalb der <a>-Verlinkung (".card-row-link" ist
+   "display:contents" und daher fuer das Grid unsichtbar), damit ein Tipp
+   darauf auf dem Handy/als installierte App nicht gleichzeitig zum Artikel
+   navigiert (siehe ausfuehrlicher Kommentar bei .list-row). */
+.card-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  grid-template-areas: "photo title status" "photo console status" "photo price status";
+  column-gap: 12px;
+  row-gap: 2px;
+  align-items: center;
+  padding: 10px 40px 10px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow .15s ease, transform .15s ease;
+}
+.card-row:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.card-row-link { display: contents; color: inherit; text-decoration: none; cursor: pointer; }
+.card-row-photo { grid-area: photo; width: 64px; height: 64px; border-radius: 10px; overflow: hidden; background: var(--photo-bg); }
+.card-row-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.card-row-photo .no-photo { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 1.5rem; color: var(--text-muted); }
+.card-row-title { grid-area: title; font-weight: 600; font-family: var(--font-display); font-size: 0.92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-row-console { grid-area: console; font-size: 0.78rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-row-price { grid-area: price; font-weight: 700; font-family: var(--font-display); font-size: 0.92rem; margin-top: 2px; }
+.card-row-status { grid-area: status; justify-self: end; align-self: start; margin-top: 22px; max-width: 120px; }
+.card-row .fav-btn { position: absolute; top: 8px; right: 8px; z-index: 2; }
+
 .card {
   position: relative;
   background: var(--card);
