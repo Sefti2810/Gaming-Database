@@ -78,14 +78,13 @@
       <summary>Status <span class="ms-count"></span></summary>
       <div class="ms-options"></div>
     </details>
-    <label class="coop-filter-toggle">
-      <input type="checkbox" name="coop_only" id="coop-only-filter">
-      🎮 Nur Koop/Kampagne
-    </label>
-    <label class="coop-filter-toggle">
-      <input type="checkbox" name="favorites_only" id="favorites-only-filter">
-      ⭐ Nur Favoriten
-    </label>
+    <!-- Koop-/Favoriten-Filter sind aus der sichtbaren Filterliste entfernt (Stefan-Feedback:
+         redundant, da bereits als eigene Icons in der Bottom-Navigation vorhanden). Die
+         Checkboxen bleiben unsichtbar im Formular bestehen, damit #/coop und #/favoriten
+         (renderIndex(preset)) sie weiterhin per JS setzen/lesen koennen, ohne die bestehende
+         Filter-Logik/FormData anfassen zu muessen. -->
+    <input type="checkbox" name="coop_only" id="coop-only-filter" hidden>
+    <input type="checkbox" name="favorites_only" id="favorites-only-filter" hidden>
     <select name="sort">
       <option value="created_desc">Neueste zuerst</option>
       <option value="created_asc">Älteste zuerst</option>
