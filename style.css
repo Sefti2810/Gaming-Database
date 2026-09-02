@@ -524,7 +524,11 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px calc(84px + env(saf
   position: relative;
   display: grid;
   grid-template-columns: 64px 1fr auto;
-  grid-template-areas: "photo title status" "photo console status" "photo price status";
+  /* Titel bekommt eine eigene, volle Zeile (Titel- + Status-Spalte
+     zusammen) bis kurz vor den Stern, da die vollstaendige Bezeichnung oft
+     erst eindeutig macht, um welchen Artikel es sich handelt. Status-Pill
+     ruckt dafuer in die Konsole/Preis-Zeilen (rechts daneben). */
+  grid-template-areas: "photo title title" "photo console status" "photo price status";
   column-gap: 12px;
   row-gap: 2px;
   align-items: center;
@@ -540,10 +544,20 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px calc(84px + env(saf
 .card-row-photo { grid-area: photo; width: 64px; height: 64px; border-radius: 10px; overflow: hidden; background: var(--photo-bg); }
 .card-row-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .card-row-photo .no-photo { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 1.5rem; color: var(--text-muted); }
-.card-row-title { grid-area: title; font-weight: 600; font-family: var(--font-display); font-size: 0.92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-row-title {
+  grid-area: title;
+  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: 0.92rem;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  word-break: break-word;
+  margin-bottom: 2px;
+}
 .card-row-console { grid-area: console; font-size: 0.78rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-row-price { grid-area: price; font-weight: 700; font-family: var(--font-display); font-size: 0.92rem; margin-top: 2px; }
-.card-row-status { grid-area: status; justify-self: end; align-self: start; margin-top: 22px; max-width: 120px; }
+.card-row-status { grid-area: status; justify-self: end; align-self: center; max-width: 120px; }
 .card-row .fav-btn { position: absolute; top: 8px; right: 8px; z-index: 2; }
 
 .card {
@@ -648,11 +662,43 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px calc(84px + env(saf
 }
 @media (max-width: 720px) {
   .list-header { display: none; }
-  .list-row { grid-template-columns: 1fr 1fr; grid-auto-rows: auto; row-gap: 4px; position: relative; }
+  /* Mobil: Typ-Badge (Spiel/Zubehoer/...) faellt weg - bei den meisten
+     Sammlungen ohnehin fast immer "Spiel" und daher keine zusaetzliche
+     Information wert. Stattdessen bekommt der Titel die volle Zeilenbreite
+     und wird nicht mehr abgeschnitten, da die vollstaendige Bezeichnung oft
+     erst eindeutig macht, um welchen Artikel es sich handelt (z.B. welche
+     Edition/welcher Teil). Eigene grid-template-areas statt impliziter
+     Auto-Platzierung, analog zum .sell-row-Fix weiter unten. */
+  .list-row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "title title" "console status" "price1 price2";
+    row-gap: 6px;
+    position: relative;
+  }
   .list-check { display: none; }
-  /* Der Stern wird aus dem 2-spaltigen Mobil-Grid herausgenommen (sonst
-     verschiebt er alle anderen Zellen) und stattdessen oben rechts in die
-     Zeile gesetzt. */
+  .list-row .badge-inline { display: none; }
+  .list-row .list-title {
+    grid-area: title;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    padding-right: 30px;
+  }
+  .list-row .list-console { grid-area: console; align-self: center; }
+  .list-row .list-status { grid-area: status; justify-self: end; }
+  /* Die beiden Preis-Spans liegen als Geschwister im selben, per
+     "display:contents" transparenten <a>-Link - dieser wird hier gezielt
+     wieder auf "flex" zurueckgesetzt, damit seine Kinder (Kauf/Wert) sich
+     gemeinsam die volle Zeilenbreite teilen statt der generischen
+     2-Spalten-Aufteilung zu folgen. */
+  .list-row a.list-row-link:nth-of-type(2) {
+    grid-row: 3;
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+  }
+  /* Der Stern wird aus dem Mobil-Grid herausgenommen (sonst verschiebt er
+     alle anderen Zellen) und stattdessen oben rechts in die Zeile gesetzt. */
   .list-fav { position: absolute; top: 8px; right: 10px; }
 }
 
