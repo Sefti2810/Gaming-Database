@@ -471,6 +471,9 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 20px calc(84px + env(saf
   width: 100%; font-family: inherit; font-size: 0.9rem; padding: 10px;
   border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text); resize: vertical;
 }
+.listing-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.listing-actions a.btn-secondary { display: inline-flex; align-items: center; }
+.listing-hint { font-size: 0.8rem; color: var(--text-muted); margin: 0; }
 
 .grid, .storage-view { transition: opacity .18s ease; }
 /* Standardansicht "Karten": schlanke Zeilen-Karten untereinander statt

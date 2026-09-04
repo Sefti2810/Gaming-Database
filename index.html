@@ -402,8 +402,12 @@
       <button type="button" id="listing-btn" class="btn-secondary">📋 Angebotstext erstellen</button>
       <div id="listing-output" class="listing-output hidden">
         <textarea id="listing-text" rows="6" readonly></textarea>
-        <button type="button" id="listing-copy-btn" class="btn-secondary small">In Zwischenablage kopieren</button>
+        <div class="listing-actions">
+          <button type="button" id="listing-copy-btn" class="btn-secondary small">In Zwischenablage kopieren</button>
+          <a id="listing-willhaben-btn" class="btn-secondary small" href="https://www.willhaben.at/" target="_blank" rel="noopener">🛒 Bei willhaben inserieren</a>
+        </div>
         <span id="listing-copy-status" class="status-text"></span>
+        <p class="listing-hint">Text kopieren, auf willhaben "Verkaufen" klicken, einfügen und Fotos hochladen – eine direkte Konto-Verknüpfung bietet willhaben leider nicht an.</p>
       </div>
     </div>
     <form id="delete-form">
