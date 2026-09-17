@@ -804,12 +804,19 @@ function signedEur(n) {
   return (n >= 0 ? "+" : "") + Number(n).toFixed(2) + " €";
 }
 
-// Erwarteter Verkaufspreis eines Artikels: Wunschpreis, falls gesetzt, sonst
-// der geschätzte Marktwert als Rückfallwert.
+// Erwarteter Verkaufspreis eines Artikels: der geschätzte Marktwert.
 function expectedSalePrice(item) {
-  if (item.asking_price != null) return Number(item.asking_price);
   if (item.estimated_value != null) return Number(item.estimated_value);
   return null;
+}
+
+// Empfohlener Angebotspreis fuer eine neue Anzeige (z. B. willhaben):
+// immer 20% ueber dem Kaufpreis. Verkauft der Artikel zu diesem Preis
+// nicht, kann der tatsaechliche Angebotspreis manuell nach unten
+// korrigiert werden (siehe Notiz von Stefan).
+function suggestedListingPrice(item) {
+  if (item.purchase_price == null) return null;
+  return Math.round(Number(item.purchase_price) * 1.2 * 100) / 100;
 }
 
 // "highlight" markiert die wichtigsten Kennzahlen groesser/betonter - genutzt
@@ -1364,7 +1371,8 @@ function sellRowHtml(item) {
         <span class="list-status">${saleStatusInlineHtml(item)}</span>
         <a class="list-row-link" href="#/item/${item.id}">
           <span class="list-price">Kauf: ${eur(item.purchase_price)}</span>
-          <span class="list-price">${item.asking_price != null ? "Wunsch" : "Wert"}: ${eur(expected)}</span>
+          <span class="list-price">Wert: ${eur(expected)}</span>
+          <span class="list-price">Angebot: ${eur(suggestedListingPrice(item))}</span>
           <span class="list-price ${profit == null ? "" : profit >= 0 ? "pos" : "neg"}">${signedEur(profit)}</span>
         </a>
       </div>`;
@@ -1638,8 +1646,6 @@ function renderAdd() {
         details: document.getElementById("f-details").value.trim(),
         purchase_price: parseFloatOrNull(document.getElementById("f-purchase").value),
         estimated_value: parseFloatOrNull(document.getElementById("f-estimated").value),
-        asking_price: parseFloatOrNull(document.getElementById("f-asking").value),
-        minimum_price: parseFloatOrNull(document.getElementById("f-minimum").value),
         region: document.getElementById("f-region").value.trim(),
         sale_status: document.getElementById("f-sale-status").value || null,
         sold_price: parseFloatOrNull(document.getElementById("f-sold-price").value),
@@ -1829,8 +1835,6 @@ async function renderItem(id) {
   enhanceCombo(document.getElementById("e-region"), REGION_OPTIONS);
   document.getElementById("e-purchase").value = item.purchase_price ?? "";
   document.getElementById("e-estimated").value = item.estimated_value ?? "";
-  document.getElementById("e-asking").value = item.asking_price ?? "";
-  document.getElementById("e-minimum").value = item.minimum_price ?? "";
   document.getElementById("e-sale-status").value = item.sale_status || "";
   document.getElementById("e-sold-price").value = item.sold_price ?? "";
   document.getElementById("e-storage-location").value = item.storage_location || "";
@@ -1873,8 +1877,6 @@ async function renderItem(id) {
       details: document.getElementById("e-details").value.trim(),
       purchase_price: parseFloatOrNull(document.getElementById("e-purchase").value),
       estimated_value: parseFloatOrNull(document.getElementById("e-estimated").value),
-      asking_price: parseFloatOrNull(document.getElementById("e-asking").value),
-      minimum_price: parseFloatOrNull(document.getElementById("e-minimum").value),
       region: document.getElementById("e-region").value.trim(),
       sale_status: document.getElementById("e-sale-status").value || null,
       sold_price: parseFloatOrNull(document.getElementById("e-sold-price").value),
@@ -1977,8 +1979,8 @@ async function renderItem(id) {
 // Gewinnrechner auf der Artikel-Detailseite: eigenstaendiges Rechen-Tool
 // (Kaufpreis/Verkaufspreis -> Gewinn + Rendite %), unabhaengig vom
 // Formular - hier eingegebene Werte werden NICHT gespeichert, es ist reines
-// Durchprobieren. Vorbefuellt mit Kaufpreis und Wunschpreis (bzw. Marktwert
-// als Rueckfall) des Artikels.
+// Durchprobieren. Vorbefuellt mit Kaufpreis und dem empfohlenen Angebotspreis
+// (Kaufpreis +20%, bzw. Marktwert als Rueckfall) des Artikels.
 // ---------------------------------------------------------------------
 function setupProfitCalculator(item) {
   const purchaseInput = document.getElementById("calc-purchase");
@@ -1988,7 +1990,7 @@ function setupProfitCalculator(item) {
   if (!purchaseInput || !saleInput || !profitOut || !marginOut) return;
 
   purchaseInput.value = item.purchase_price ?? "";
-  saleInput.value = expectedSalePrice(item) ?? "";
+  saleInput.value = suggestedListingPrice(item) ?? expectedSalePrice(item) ?? "";
 
   function recompute() {
     const p = parseFloat(purchaseInput.value);
@@ -2121,7 +2123,7 @@ async function exportCsv() {
     flash("⚠️ Export fehlgeschlagen: " + error.message);
     return;
   }
-  const header = ["Typ", "Titel", "Konsole", "Region", "Kategorie", "Zustand", "Details", "Kaufpreis", "Geschaetzter Wert", "Wunschpreis", "Mindestpreis", "Verkaufsstatus", "Verkaufspreis", "Lagerort", "Koop/Kampagne", "Favorit", "Notizen", "Erstellt"];
+  const header = ["Typ", "Titel", "Konsole", "Region", "Kategorie", "Zustand", "Details", "Kaufpreis", "Geschaetzter Wert", "Angebot (Kaufpreis +20%)", "Verkaufsstatus", "Verkaufspreis", "Lagerort", "Koop/Kampagne", "Favorit", "Notizen", "Erstellt"];
   const rows = items.map((r) => [
     TYPE_LABELS[r.type] || r.type,
     r.title,
@@ -2132,8 +2134,7 @@ async function exportCsv() {
     r.details,
     r.purchase_price ?? "",
     r.estimated_value ?? "",
-    r.asking_price ?? "",
-    r.minimum_price ?? "",
+    suggestedListingPrice(r) ?? "",
     (SALE_STATUS[r.sale_status] && SALE_STATUS[r.sale_status].label) || "",
     r.sold_price ?? "",
     r.storage_location || "",
